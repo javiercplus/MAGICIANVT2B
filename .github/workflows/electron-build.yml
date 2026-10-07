@@ -1,0 +1,47 @@
+name: Build Electron App
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        # Compilará para Linux y Windows en paralelo
+        os: [ubuntu-latest, windows-latest]
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Next.js and Electron
+        run: npm run build:electron
+        env:
+          # Para evitar que electron-builder intente publicar si detecta variables de entorno de GH
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MagicianVT2B-App-${{ matrix.os }}
+          path: |
+            dist/*.AppImage
+            dist/*.exe
+            dist/*.zip
+            dist/*.deb
+          if-no-files-found: warn

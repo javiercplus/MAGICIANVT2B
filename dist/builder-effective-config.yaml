@@ -1,0 +1,14 @@
+directories:
+  output: dist
+  buildResources: build
+appId: com.magicianvt2b.app
+productName: MagicianVT2B
+files:
+  - filter:
+      - out/**/*
+      - main.js
+linux:
+  target: AppImage
+win:
+  target: nsis
+electronVersion: 44.6.0
