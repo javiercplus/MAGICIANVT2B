@@ -3,7 +3,7 @@
 import {
   MousePointerClick, Mic, Eye, Upload, RotateCcw, AlertCircle,
   Loader2, CircleCheck, Square, Circle, Palette, Crosshair,
-  Image as ImageIcon, Sun, RotateCw, Save, Activity,
+  Image as ImageIcon, Sun, RotateCw, Save, Activity, Dna,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,8 @@ interface ControlPanelProps {
   captureOutside: boolean;
   micEnabled: boolean;
   autoBlinkEnabled: boolean;
+  randomEyesEnabled: boolean;
+  randomEyesIntensity: number;
   idleSwayEnabled: boolean;
   idleSwayIntensity: number;
   greenScreen: boolean;
@@ -40,6 +42,8 @@ interface ControlPanelProps {
   onCaptureOutsideToggle: (v: boolean) => void;
   onMicToggle: (v: boolean) => void;
   onAutoBlinkToggle: (v: boolean) => void;
+  onRandomEyesToggle: (v: boolean) => void;
+  onRandomEyesIntensityChange: (v: number) => void;
   onIdleSwayToggle: (v: boolean) => void;
   onIdleSwayIntensityChange: (v: number) => void;
   onGreenScreenToggle: (v: boolean) => void;
@@ -83,7 +87,7 @@ interface ToggleRowProps {
 
 function ToggleRow({ icon, label, description, checked, onCheckedChange, accentClass, indent }: ToggleRowProps) {
   return (
-    <div className={cn('flex items-start gap-3 rounded-lg p-2 hover:bg-zinc-800/40 transition-colors', indent && 'ml-3')}>
+    <div className={cn('flex items-start gap-3 rounded-lg p-2 hover:bg-zinc-800/40 transition-colors', indent && 'ml-8')}>
       <div className={cn('flex items-center justify-center rounded-md w-7 h-7 shrink-0 mt-0.5',
         checked ? accentClass ?? 'bg-violet-500/20 text-violet-300' : 'bg-zinc-800/60 text-zinc-500')}>
         {icon}
@@ -173,11 +177,11 @@ function LightSection({
 export function ControlPanel(props: ControlPanelProps) {
   const {
     vrmName, vrmStatus, vrmError,
-    gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, idleSwayEnabled, idleSwayIntensity, greenScreen, hasBackground,
+    gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, hasBackground,
     micLevel, micReady, micError,
     isRecording, recordingSec,
     lighting,
-    onGazeToggle, onCaptureOutsideToggle, onMicToggle, onAutoBlinkToggle, onIdleSwayToggle, onIdleSwayIntensityChange, onGreenScreenToggle,
+    onGazeToggle, onCaptureOutsideToggle, onMicToggle, onAutoBlinkToggle, onRandomEyesToggle, onRandomEyesIntensityChange, onIdleSwayToggle, onIdleSwayIntensityChange, onGreenScreenToggle,
     onLightingChange,
     onPickFile, onResetVRM, onPickBackground, onClearBackground, onRecordToggle, onSaveConfig,
   } = props;
@@ -245,7 +249,7 @@ export function ControlPanel(props: ControlPanelProps) {
           </TabsContent>
 
           <TabsContent value="motion" className="mt-3 space-y-3">
-            <ScrollArea className="max-h-[280px]">
+            <ScrollArea className="max-h-[400px]">
               <div className="space-y-1 pr-1">
                 <ToggleRow icon={<MousePointerClick className="w-4 h-4" />}
                   label="Gaze Tracking" description="Head + eyes follow mouse. Off = forward."
@@ -255,6 +259,22 @@ export function ControlPanel(props: ControlPanelProps) {
                     label="Capture Outside" description="Pointer lock: click canvas, Esc to exit."
                     checked={captureOutside} onCheckedChange={onCaptureOutsideToggle}
                     accentClass="bg-indigo-500/20 text-indigo-300" indent />
+                )}
+                <ToggleRow icon={<Dna className="w-4 h-4" />}
+                  label="Random Eyes" description="Organic micro-movements, overrides mouse."
+                  checked={randomEyesEnabled} onCheckedChange={onRandomEyesToggle} accentClass="bg-sky-500/20 text-sky-300" />
+                {randomEyesEnabled && (
+                  <div className="ml-11 mr-2 p-2 rounded-md bg-zinc-900/40 border border-zinc-800/60">
+                    <LightSlider
+                      label="Saccade Radius"
+                      value={randomEyesIntensity}
+                      min={0.01}
+                      max={0.3}
+                      step={0.01}
+                      decimals={2}
+                      onChange={onRandomEyesIntensityChange}
+                    />
+                  </div>
                 )}
                 <ToggleRow icon={<Mic className="w-4 h-4" />}
                   label="LipSync (Mic)" description="Mouth open from mic amplitude."
@@ -266,8 +286,7 @@ export function ControlPanel(props: ControlPanelProps) {
                   label="Idle Sway" description="Natural breathing and body movement."
                   checked={idleSwayEnabled} onCheckedChange={onIdleSwayToggle} accentClass="bg-amber-500/20 text-amber-300" />
                 {idleSwayEnabled && (
-                  <div className="ml-11 mr-2 mb-3 p-2.5 rounded-md bg-zinc-800/40 border border-zinc-700/40 shadow-inner relative -mt-1">
-                    <div className="absolute -left-5 top-0 bottom-4 w-px bg-zinc-700/50 rounded-full" />
+                  <div className="ml-11 mr-2 p-2 rounded-md bg-zinc-900/40 border border-zinc-800/60">
                     <LightSlider
                       label="Sway Amount"
                       value={idleSwayIntensity}

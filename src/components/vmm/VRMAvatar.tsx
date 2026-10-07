@@ -20,6 +20,8 @@ interface VRMAvatarProps {
   vrmUrl: string | null;
   gazeEnabled: boolean;
   autoBlinkEnabled: boolean;
+  randomEyesEnabled: boolean;
+  randomEyesIntensity: number;
   idleSwayEnabled: boolean;
   idleSwayIntensity: number;
   gazeDesiredRef: React.RefObject<GazeTarget>;
@@ -34,7 +36,7 @@ interface VRMAvatarProps {
 // every frame for gaze tracking, lipsync, and auto-blink.
 export function VRMAvatar(props: VRMAvatarProps) {
   const {
-    vrmUrl, gazeEnabled, autoBlinkEnabled, idleSwayEnabled, idleSwayIntensity,
+    vrmUrl, gazeEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity,
     gazeDesiredRef, gazeCurrentRef, mouthValueRef, avatarOffsetRef,
     onLoaded, onError,
   } = props;
@@ -50,6 +52,11 @@ export function VRMAvatar(props: VRMAvatarProps) {
   const blinkStateRef = useRef({
     elapsed: 0,
     nextDelay: randomNextBlinkDelay(),
+  });
+  const randomEyesStateRef = useRef({
+    elapsed: 0,
+    nextDelay: 1.0 + Math.random() * 2.0,
+    target: { x: 0, y: 0 } as GazeTarget,
   });
 
   const { camera } = useThree();
@@ -121,10 +128,25 @@ export function VRMAvatar(props: VRMAvatarProps) {
       scene.position.set(offset.x, offset.y, offset.z);
     }
 
-    // Gaze tracking: lerp toward desired (or forward if disabled)
-    const desired = gazeEnabled
-      ? gazeDesiredRef.current
-      : ({ x: 0, y: 0 } as GazeTarget);
+    // Gaze tracking / Random Eyes: lerp toward desired target
+    let desired: GazeTarget;
+    if (randomEyesEnabled) {
+      const rs = randomEyesStateRef.current;
+      rs.elapsed += dt;
+      if (rs.elapsed >= rs.nextDelay) {
+        rs.elapsed = 0;
+        rs.nextDelay = 1.0 + Math.random() * 2.0; // 1 to 3 seconds
+        // Clamp to given intensity radius
+        rs.target.x = (Math.random() * 2 - 1) * randomEyesIntensity;
+        rs.target.y = (Math.random() * 2 - 1) * randomEyesIntensity;
+      }
+      desired = rs.target;
+    } else if (gazeEnabled) {
+      desired = gazeDesiredRef.current;
+    } else {
+      desired = { x: 0, y: 0 } as GazeTarget;
+    }
+
     gazeCurrentRef.current = smoothDampGaze(
       gazeCurrentRef.current, desired, GAZE.LERP_SPEED, dt
     );

@@ -33,6 +33,8 @@ export default function Page() {
   const [captureOutside, setCaptureOutside] = useState(false);
   const [micEnabled, setMicEnabled] = useState(false);
   const [autoBlinkEnabled, setAutoBlinkEnabled] = useState(true);
+  const [randomEyesEnabled, setRandomEyesEnabled] = useState(false);
+  const [randomEyesIntensity, setRandomEyesIntensity] = useState(0.15);
   const [idleSwayEnabled, setIdleSwayEnabled] = useState(true);
   const [idleSwayIntensity, setIdleSwayIntensity] = useState(0.02);
   const [greenScreen, setGreenScreen] = useState(false);
@@ -72,6 +74,8 @@ export default function Page() {
       if (config.captureOutside !== undefined) setCaptureOutside(config.captureOutside);
       if (config.micEnabled !== undefined) setMicEnabled(config.micEnabled);
       if (config.autoBlinkEnabled !== undefined) setAutoBlinkEnabled(config.autoBlinkEnabled);
+      if (config.randomEyesEnabled !== undefined) setRandomEyesEnabled(config.randomEyesEnabled);
+      if (config.randomEyesIntensity !== undefined) setRandomEyesIntensity(config.randomEyesIntensity);
       if (config.idleSwayEnabled !== undefined) setIdleSwayEnabled(config.idleSwayEnabled);
       if (config.idleSwayIntensity !== undefined) setIdleSwayIntensity(config.idleSwayIntensity);
       if (config.greenScreen !== undefined) setGreenScreen(config.greenScreen);
@@ -190,7 +194,7 @@ export default function Page() {
 
   const handleSaveConfig = useCallback(async () => {
     saveConfig({
-      gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, idleSwayEnabled, idleSwayIntensity, greenScreen, lighting
+      gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, lighting
     });
     if (vrmUrl && vrmUrl !== DEFAULT_VRM_URL) {
       try {
@@ -201,7 +205,7 @@ export default function Page() {
         console.error('Failed to save VRM blob', e);
       }
     }
-  }, [gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, idleSwayEnabled, idleSwayIntensity, greenScreen, lighting, vrmUrl, vrmName]);
+  }, [gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, lighting, vrmUrl, vrmName]);
 
   const displayVrmName = meta?.name || vrmName;
   const headerStatus = vrmStatus === 'loaded'
@@ -217,6 +221,7 @@ export default function Page() {
         <div className="absolute inset-0">
           <VRMScene
             vrmUrl={vrmUrl} gazeEnabled={gazeEnabled} autoBlinkEnabled={autoBlinkEnabled}
+            randomEyesEnabled={randomEyesEnabled} randomEyesIntensity={randomEyesIntensity}
             idleSwayEnabled={idleSwayEnabled} idleSwayIntensity={idleSwayIntensity}
             gazeDesiredRef={desiredRef} gazeCurrentRef={currentRef}
             mouthValueRef={mouthValueRef} avatarOffsetRef={avatarOffsetRef}
@@ -265,6 +270,7 @@ export default function Page() {
             vrmName={displayVrmName} vrmStatus={vrmStatus} vrmError={effectiveVrmError}
             gazeEnabled={gazeEnabled} captureOutside={captureOutside}
             micEnabled={micEnabled} autoBlinkEnabled={autoBlinkEnabled}
+            randomEyesEnabled={randomEyesEnabled} randomEyesIntensity={randomEyesIntensity}
             idleSwayEnabled={idleSwayEnabled} idleSwayIntensity={idleSwayIntensity}
             greenScreen={greenScreen} hasBackground={!!backgroundImageUrl}
             micLevel={level} micReady={micReady} micError={micError}
@@ -272,6 +278,7 @@ export default function Page() {
             lighting={lighting}
             onGazeToggle={setGazeEnabled} onCaptureOutsideToggle={setCaptureOutside}
             onMicToggle={setMicEnabled} onAutoBlinkToggle={setAutoBlinkEnabled}
+            onRandomEyesToggle={setRandomEyesEnabled} onRandomEyesIntensityChange={setRandomEyesIntensity}
             onIdleSwayToggle={setIdleSwayEnabled} onIdleSwayIntensityChange={setIdleSwayIntensity}
             onGreenScreenToggle={setGreenScreen}
             onLightingChange={setLighting}
