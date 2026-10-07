@@ -2,9 +2,9 @@ name: Build Electron App
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "electron" ]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: [ "electron" ]
   workflow_dispatch:
 
 jobs:
