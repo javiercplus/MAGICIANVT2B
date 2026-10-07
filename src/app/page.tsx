@@ -6,7 +6,6 @@ import { Loader2 } from 'lucide-react';
 import { VRMScene } from '@/components/vmm/VRMScene';
 import { ControlPanel } from '@/components/vmm/ControlPanel';
 import { Header } from '@/components/vmm/Header';
-import { Footer } from '@/components/vmm/Footer';
 import { DropZone } from '@/components/vmm/DropZone';
 import { HideControlsButton } from '@/components/vmm/HideControlsButton';
 import { useGazeTracking } from '@/hooks/useGazeTracking';
@@ -288,13 +287,6 @@ export default function Page() {
           </div>
         )}
       </main>
-
-      <div className={cn(
-        'transition-all duration-300',
-        controlsHidden && 'opacity-0 pointer-events-none translate-y-4'
-      )}>
-        <Footer />
-      </div>
 
       <input ref={fileInputRef} type="file" accept=".vrm" className="hidden"
         onChange={(e) => {

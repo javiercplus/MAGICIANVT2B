@@ -192,9 +192,10 @@ export function ControlPanel(props: ControlPanelProps) {
 
       <CardContent className="p-3 pt-0">
         <Tabs defaultValue="avatar" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 bg-zinc-800/60 h-8">
-            <TabsTrigger value="avatar" className="text-xs">Avatar</TabsTrigger>
-            <TabsTrigger value="lighting" className="text-xs">Lighting</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3 bg-zinc-800/60 h-8">
+            <TabsTrigger value="avatar" className="text-[10px] uppercase tracking-wider">Avatar</TabsTrigger>
+            <TabsTrigger value="scene" className="text-[10px] uppercase tracking-wider">Scene</TabsTrigger>
+            <TabsTrigger value="lighting" className="text-[10px] uppercase tracking-wider">Light</TabsTrigger>
           </TabsList>
 
           <TabsContent value="avatar" className="mt-3 space-y-3">
@@ -255,13 +256,6 @@ export function ControlPanel(props: ControlPanelProps) {
                 <ToggleRow icon={<Eye className="w-4 h-4" />}
                   label="Auto Blink" description="Random blinks every 3–12s."
                   checked={autoBlinkEnabled} onCheckedChange={onAutoBlinkToggle} accentClass="bg-emerald-500/20 text-emerald-300" />
-                <ToggleRow icon={<Palette className="w-4 h-4" />}
-                  label="Green Screen" description="Chroma-key background for OBS."
-                  checked={greenScreen} onCheckedChange={onGreenScreenToggle} accentClass="bg-emerald-500/20 text-emerald-300" />
-                <ToggleRow icon={<ImageIcon className="w-4 h-4" />}
-                  label="Custom Background" description="Import image as background."
-                  checked={hasBackground} onCheckedChange={(v) => v ? onPickBackground() : onClearBackground()}
-                  accentClass="bg-sky-500/20 text-sky-300" />
               </div>
             </ScrollArea>
 
@@ -276,6 +270,18 @@ export function ControlPanel(props: ControlPanelProps) {
                 <Progress value={Math.round(micLevel * 100)} className="h-1.5 bg-zinc-800" />
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="scene" className="mt-3 space-y-2">
+            <div className="space-y-1">
+              <ToggleRow icon={<Palette className="w-4 h-4" />}
+                label="Green Screen" description="Chroma-key background for OBS."
+                checked={greenScreen} onCheckedChange={onGreenScreenToggle} accentClass="bg-emerald-500/20 text-emerald-300" />
+              <ToggleRow icon={<ImageIcon className="w-4 h-4" />}
+                label="Custom Background" description="Import image as background."
+                checked={hasBackground} onCheckedChange={(v) => v ? onPickBackground() : onClearBackground()}
+                accentClass="bg-sky-500/20 text-sky-300" />
+            </div>
           </TabsContent>
 
           <TabsContent value="lighting" className="mt-3 space-y-2">
