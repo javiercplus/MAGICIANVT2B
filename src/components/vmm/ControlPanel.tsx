@@ -3,7 +3,7 @@
 import {
   MousePointerClick, Mic, Eye, Upload, RotateCcw, AlertCircle,
   Loader2, CircleCheck, Square, Circle, Palette, Crosshair,
-  Image as ImageIcon, Sun, RotateCw, Save,
+  Image as ImageIcon, Sun, RotateCw, Save, Activity,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,8 @@ interface ControlPanelProps {
   captureOutside: boolean;
   micEnabled: boolean;
   autoBlinkEnabled: boolean;
+  idleSwayEnabled: boolean;
+  idleSwayIntensity: number;
   greenScreen: boolean;
   hasBackground: boolean;
   micLevel: number;
@@ -38,6 +40,8 @@ interface ControlPanelProps {
   onCaptureOutsideToggle: (v: boolean) => void;
   onMicToggle: (v: boolean) => void;
   onAutoBlinkToggle: (v: boolean) => void;
+  onIdleSwayToggle: (v: boolean) => void;
+  onIdleSwayIntensityChange: (v: number) => void;
   onGreenScreenToggle: (v: boolean) => void;
   onLightingChange: (l: LightingConfig) => void;
   onPickFile: () => void;
@@ -106,16 +110,17 @@ interface LightSliderProps {
   max: number;
   step: number;
   unit?: string;
+  decimals?: number;
   onChange: (v: number) => void;
 }
 
-function LightSlider({ label, value, min, max, step, unit, onChange }: LightSliderProps) {
+function LightSlider({ label, value, min, max, step, unit, decimals = 2, onChange }: LightSliderProps) {
   return (
     <div className="space-y-1">
       <div className="flex justify-between items-center">
         <span className="text-[11px] text-zinc-400">{label}</span>
         <span className="text-[11px] text-zinc-300 tabular-nums">
-          {Number.isInteger(step) ? value : value.toFixed(2)}{unit ?? ''}
+          {Number.isInteger(step) ? value : value.toFixed(decimals)}{unit ?? ''}
         </span>
       </div>
       <Slider
@@ -168,11 +173,11 @@ function LightSection({
 export function ControlPanel(props: ControlPanelProps) {
   const {
     vrmName, vrmStatus, vrmError,
-    gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, greenScreen, hasBackground,
+    gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, idleSwayEnabled, idleSwayIntensity, greenScreen, hasBackground,
     micLevel, micReady, micError,
     isRecording, recordingSec,
     lighting,
-    onGazeToggle, onCaptureOutsideToggle, onMicToggle, onAutoBlinkToggle, onGreenScreenToggle,
+    onGazeToggle, onCaptureOutsideToggle, onMicToggle, onAutoBlinkToggle, onIdleSwayToggle, onIdleSwayIntensityChange, onGreenScreenToggle,
     onLightingChange,
     onPickFile, onResetVRM, onPickBackground, onClearBackground, onRecordToggle, onSaveConfig,
   } = props;
@@ -192,8 +197,9 @@ export function ControlPanel(props: ControlPanelProps) {
 
       <CardContent className="p-3 pt-0">
         <Tabs defaultValue="avatar" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-zinc-800/60 h-8">
+          <TabsList className="grid w-full grid-cols-4 bg-zinc-800/60 h-8">
             <TabsTrigger value="avatar" className="text-[10px] uppercase tracking-wider">Avatar</TabsTrigger>
+            <TabsTrigger value="motion" className="text-[10px] uppercase tracking-wider">Motion</TabsTrigger>
             <TabsTrigger value="scene" className="text-[10px] uppercase tracking-wider">Scene</TabsTrigger>
             <TabsTrigger value="lighting" className="text-[10px] uppercase tracking-wider">Light</TabsTrigger>
           </TabsList>
@@ -236,9 +242,9 @@ export function ControlPanel(props: ControlPanelProps) {
                 <span className="leading-tight">{vrmError || micError}</span>
               </div>
             )}
+          </TabsContent>
 
-            <Separator className="bg-zinc-800" />
-
+          <TabsContent value="motion" className="mt-3 space-y-3">
             <ScrollArea className="max-h-[280px]">
               <div className="space-y-1 pr-1">
                 <ToggleRow icon={<MousePointerClick className="w-4 h-4" />}
@@ -256,6 +262,23 @@ export function ControlPanel(props: ControlPanelProps) {
                 <ToggleRow icon={<Eye className="w-4 h-4" />}
                   label="Auto Blink" description="Random blinks every 3–12s."
                   checked={autoBlinkEnabled} onCheckedChange={onAutoBlinkToggle} accentClass="bg-emerald-500/20 text-emerald-300" />
+                <ToggleRow icon={<Activity className="w-4 h-4" />}
+                  label="Idle Sway" description="Natural breathing and body movement."
+                  checked={idleSwayEnabled} onCheckedChange={onIdleSwayToggle} accentClass="bg-amber-500/20 text-amber-300" />
+                {idleSwayEnabled && (
+                  <div className="ml-11 mr-2 mb-3 p-2.5 rounded-md bg-zinc-800/40 border border-zinc-700/40 shadow-inner relative -mt-1">
+                    <div className="absolute -left-5 top-0 bottom-4 w-px bg-zinc-700/50 rounded-full" />
+                    <LightSlider
+                      label="Sway Amount"
+                      value={idleSwayIntensity}
+                      min={0.005}
+                      max={0.1}
+                      step={0.005}
+                      decimals={3}
+                      onChange={onIdleSwayIntensityChange}
+                    />
+                  </div>
+                )}
               </div>
             </ScrollArea>
 

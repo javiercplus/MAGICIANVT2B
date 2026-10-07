@@ -20,6 +20,8 @@ interface VRMAvatarProps {
   vrmUrl: string | null;
   gazeEnabled: boolean;
   autoBlinkEnabled: boolean;
+  idleSwayEnabled: boolean;
+  idleSwayIntensity: number;
   gazeDesiredRef: React.RefObject<GazeTarget>;
   gazeCurrentRef: React.RefObject<GazeTarget>;
   mouthValueRef: React.RefObject<number>;
@@ -32,7 +34,7 @@ interface VRMAvatarProps {
 // every frame for gaze tracking, lipsync, and auto-blink.
 export function VRMAvatar(props: VRMAvatarProps) {
   const {
-    vrmUrl, gazeEnabled, autoBlinkEnabled,
+    vrmUrl, gazeEnabled, autoBlinkEnabled, idleSwayEnabled, idleSwayIntensity,
     gazeDesiredRef, gazeCurrentRef, mouthValueRef, avatarOffsetRef,
     onLoaded, onError,
   } = props;
@@ -43,6 +45,8 @@ export function VRMAvatar(props: VRMAvatarProps) {
   const neckBoneRef = useRef<THREE.Bone | null>(null);
   const leftEyeBoneRef = useRef<THREE.Bone | null>(null);
   const rightEyeBoneRef = useRef<THREE.Bone | null>(null);
+  const hipsBoneRef = useRef<THREE.Bone | null>(null);
+  const spineBoneRef = useRef<THREE.Bone | null>(null);
   const blinkStateRef = useRef({
     elapsed: 0,
     nextDelay: randomNextBlinkDelay(),
@@ -57,6 +61,8 @@ export function VRMAvatar(props: VRMAvatarProps) {
       neckBoneRef.current = null;
       leftEyeBoneRef.current = null;
       rightEyeBoneRef.current = null;
+      hipsBoneRef.current = null;
+      spineBoneRef.current = null;
       return;
     }
 
@@ -70,6 +76,8 @@ export function VRMAvatar(props: VRMAvatarProps) {
         neckBoneRef.current = vrm.humanoid?.getNormalizedBoneNode('neck') ?? null;
         leftEyeBoneRef.current = vrm.humanoid?.getNormalizedBoneNode('leftEye') ?? null;
         rightEyeBoneRef.current = vrm.humanoid?.getNormalizedBoneNode('rightEye') ?? null;
+        hipsBoneRef.current = vrm.humanoid?.getNormalizedBoneNode('hips') ?? null;
+        spineBoneRef.current = vrm.humanoid?.getNormalizedBoneNode('spine') ?? null;
         applyStandPose(vrm);
 
         vrmScene.updateMatrixWorld(true);
@@ -97,6 +105,8 @@ export function VRMAvatar(props: VRMAvatarProps) {
       neckBoneRef.current = null;
       leftEyeBoneRef.current = null;
       rightEyeBoneRef.current = null;
+      hipsBoneRef.current = null;
+      spineBoneRef.current = null;
     };
   }, [vrmUrl]);
 
@@ -154,6 +164,23 @@ export function VRMAvatar(props: VRMAvatarProps) {
         try { vrm.expressionManager?.setValue(AUTO_BLINK.BLINK_PRESET, result.value); } catch {}
       } else {
         try { vrm.expressionManager?.setValue(AUTO_BLINK.BLINK_PRESET, 0); } catch {}
+      }
+    }
+
+    // Idle sway (balanceo inactivo)
+    const hips = hipsBoneRef.current;
+    const spine = spineBoneRef.current;
+
+    if (hips && spine) {
+      if (idleSwayEnabled) {
+        const time = performance.now() * 0.001;
+        const speed = 1.0;
+        const swayAmount = idleSwayIntensity;
+        hips.rotation.z = Math.sin(time * speed) * swayAmount;
+        spine.rotation.z = Math.sin(time * speed + Math.PI) * (swayAmount * 0.5);
+      } else {
+        hips.rotation.z = 0;
+        spine.rotation.z = 0;
       }
     }
 

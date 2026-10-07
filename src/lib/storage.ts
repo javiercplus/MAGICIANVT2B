@@ -3,6 +3,8 @@ export interface SavedConfig {
   captureOutside?: boolean;
   micEnabled?: boolean;
   autoBlinkEnabled?: boolean;
+  idleSwayEnabled?: boolean;
+  idleSwayIntensity?: number;
   greenScreen?: boolean;
   lighting?: any; // LightingConfig
 }

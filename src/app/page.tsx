@@ -33,6 +33,8 @@ export default function Page() {
   const [captureOutside, setCaptureOutside] = useState(false);
   const [micEnabled, setMicEnabled] = useState(false);
   const [autoBlinkEnabled, setAutoBlinkEnabled] = useState(true);
+  const [idleSwayEnabled, setIdleSwayEnabled] = useState(true);
+  const [idleSwayIntensity, setIdleSwayIntensity] = useState(0.02);
   const [greenScreen, setGreenScreen] = useState(false);
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
   const [lighting, setLighting] = useState<LightingConfig>(DEFAULT_LIGHTING);
@@ -70,6 +72,8 @@ export default function Page() {
       if (config.captureOutside !== undefined) setCaptureOutside(config.captureOutside);
       if (config.micEnabled !== undefined) setMicEnabled(config.micEnabled);
       if (config.autoBlinkEnabled !== undefined) setAutoBlinkEnabled(config.autoBlinkEnabled);
+      if (config.idleSwayEnabled !== undefined) setIdleSwayEnabled(config.idleSwayEnabled);
+      if (config.idleSwayIntensity !== undefined) setIdleSwayIntensity(config.idleSwayIntensity);
       if (config.greenScreen !== undefined) setGreenScreen(config.greenScreen);
       if (config.lighting !== undefined) setLighting(config.lighting);
     }
@@ -186,7 +190,7 @@ export default function Page() {
 
   const handleSaveConfig = useCallback(async () => {
     saveConfig({
-      gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, greenScreen, lighting
+      gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, idleSwayEnabled, idleSwayIntensity, greenScreen, lighting
     });
     if (vrmUrl && vrmUrl !== DEFAULT_VRM_URL) {
       try {
@@ -197,7 +201,7 @@ export default function Page() {
         console.error('Failed to save VRM blob', e);
       }
     }
-  }, [gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, greenScreen, lighting, vrmUrl, vrmName]);
+  }, [gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, idleSwayEnabled, idleSwayIntensity, greenScreen, lighting, vrmUrl, vrmName]);
 
   const displayVrmName = meta?.name || vrmName;
   const headerStatus = vrmStatus === 'loaded'
@@ -213,6 +217,7 @@ export default function Page() {
         <div className="absolute inset-0">
           <VRMScene
             vrmUrl={vrmUrl} gazeEnabled={gazeEnabled} autoBlinkEnabled={autoBlinkEnabled}
+            idleSwayEnabled={idleSwayEnabled} idleSwayIntensity={idleSwayIntensity}
             gazeDesiredRef={desiredRef} gazeCurrentRef={currentRef}
             mouthValueRef={mouthValueRef} avatarOffsetRef={avatarOffsetRef}
             greenScreen={greenScreen} backgroundImageUrl={backgroundImageUrl}
@@ -260,12 +265,14 @@ export default function Page() {
             vrmName={displayVrmName} vrmStatus={vrmStatus} vrmError={effectiveVrmError}
             gazeEnabled={gazeEnabled} captureOutside={captureOutside}
             micEnabled={micEnabled} autoBlinkEnabled={autoBlinkEnabled}
+            idleSwayEnabled={idleSwayEnabled} idleSwayIntensity={idleSwayIntensity}
             greenScreen={greenScreen} hasBackground={!!backgroundImageUrl}
             micLevel={level} micReady={micReady} micError={micError}
             isRecording={isRecording} recordingSec={recordingSec}
             lighting={lighting}
             onGazeToggle={setGazeEnabled} onCaptureOutsideToggle={setCaptureOutside}
             onMicToggle={setMicEnabled} onAutoBlinkToggle={setAutoBlinkEnabled}
+            onIdleSwayToggle={setIdleSwayEnabled} onIdleSwayIntensityChange={setIdleSwayIntensity}
             onGreenScreenToggle={setGreenScreen}
             onLightingChange={setLighting}
             onPickFile={handlePickFile} onResetVRM={handleResetVRM}

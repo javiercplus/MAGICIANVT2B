@@ -12,6 +12,8 @@ interface VRMSceneProps {
   vrmUrl: string | null;
   gazeEnabled: boolean;
   autoBlinkEnabled: boolean;
+  idleSwayEnabled: boolean;
+  idleSwayIntensity: number;
   gazeDesiredRef: React.RefObject<GazeTarget>;
   gazeCurrentRef: React.RefObject<GazeTarget>;
   mouthValueRef: React.RefObject<number>;
@@ -52,7 +54,7 @@ function BackgroundImage({ url }: { url: string }) {
 
 export function VRMScene(props: VRMSceneProps) {
   const {
-    vrmUrl, gazeEnabled, autoBlinkEnabled,
+    vrmUrl, gazeEnabled, autoBlinkEnabled, idleSwayEnabled, idleSwayIntensity,
     gazeDesiredRef, gazeCurrentRef, mouthValueRef, avatarOffsetRef,
     greenScreen = false, backgroundImageUrl = null, lighting,
     onLoaded, onError,
@@ -119,6 +121,7 @@ export function VRMScene(props: VRMSceneProps) {
 
       <VRMAvatar
         vrmUrl={vrmUrl} gazeEnabled={gazeEnabled} autoBlinkEnabled={autoBlinkEnabled}
+        idleSwayEnabled={idleSwayEnabled} idleSwayIntensity={idleSwayIntensity}
         gazeDesiredRef={gazeDesiredRef} gazeCurrentRef={gazeCurrentRef}
         mouthValueRef={mouthValueRef} avatarOffsetRef={avatarOffsetRef}
         onLoaded={onLoaded} onError={onError}
