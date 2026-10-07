@@ -10,6 +10,8 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     
     strategy:
       matrix:
@@ -45,3 +47,18 @@ jobs:
             dist/*.zip
             dist/*.deb
           if-no-files-found: warn
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-electron
+          name: "Latest Electron Build"
+          files: |
+            dist/*.AppImage
+            dist/*.exe
+            dist/*.zip
+            dist/*.deb
+          prerelease: false
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
