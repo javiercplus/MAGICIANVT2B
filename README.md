@@ -19,7 +19,8 @@ It allows you to load `.vrm` models, manipulate lighting, and use your microphon
 - **100% Client-Side**: No backend required. Models and configurations are saved locally via IndexedDB and `localStorage`.
 
 ## Getting Started
-
+You can use the webapp https://magicianvt-2-b.vercel.app/
+or run offline :
 1. **Install dependencies**:
    ```bash
    npm install
