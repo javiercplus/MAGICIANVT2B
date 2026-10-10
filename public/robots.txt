@@ -12,3 +12,4 @@ Allow: /
 
 User-agent: *
 Allow: /
+Sitemap: https://magicianvt-2-b.vercel.app/sitemap.xml
