@@ -23,7 +23,8 @@
     },
     "files": [
       "out/**/*",
-      "main.js"
+      "main.js",
+      "preload.js"
     ],
     "linux": {
       "target": "AppImage"

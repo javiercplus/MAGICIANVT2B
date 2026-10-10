@@ -6,18 +6,12 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface DropZoneProps {
-  /** Visible when true (e.g., no VRM currently loaded or user is dragging). */
   visible: boolean;
-  /** Compact overlay style (used when a VRM is already loaded but user is dragging a new one). */
   overlay?: boolean;
   onFile: (file: File) => void;
   className?: string;
 }
 
-/**
- * Drag-and-drop / file-picker zone for .vrm files.
- * Used both as the "no avatar yet" full-screen prompt and as a drag overlay.
- */
 export function DropZone({ visible, overlay, onFile, className }: DropZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);

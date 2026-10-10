@@ -32,8 +32,6 @@ interface VRMAvatarProps {
   onError?: (err: Error) => void;
 }
 
-// Loads a VRM, adds it to the R3F scene, and updates bones/expressions
-// every frame for gaze tracking, lipsync, and auto-blink.
 export function VRMAvatar(props: VRMAvatarProps) {
   const {
     vrmUrl, gazeEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity,
@@ -122,21 +120,18 @@ export function VRMAvatar(props: VRMAvatarProps) {
     if (!vrm) return;
     const dt = Math.min(delta, 1 / 30);
 
-    // Apply avatar offset (from middle-click drag)
     const offset = avatarOffsetRef.current;
     if (offset && scene) {
       scene.position.set(offset.x, offset.y, offset.z);
     }
 
-    // Gaze tracking / Random Eyes: lerp toward desired target
     let desired: GazeTarget;
     if (randomEyesEnabled) {
       const rs = randomEyesStateRef.current;
       rs.elapsed += dt;
       if (rs.elapsed >= rs.nextDelay) {
         rs.elapsed = 0;
-        rs.nextDelay = 1.0 + Math.random() * 2.0; // 1 to 3 seconds
-        // Clamp to given intensity radius
+        rs.nextDelay = 1.0 + Math.random() * 2.0;
         rs.target.x = (Math.random() * 2 - 1) * randomEyesIntensity;
         rs.target.y = (Math.random() * 2 - 1) * randomEyesIntensity;
       }
@@ -168,12 +163,10 @@ export function VRMAvatar(props: VRMAvatarProps) {
       rightEye.quaternion.setFromEuler(euler);
     }
 
-    // Lipsync
     try {
       vrm.expressionManager?.setValue(LIPSYNC.MOUTH_OPEN_PRESET, mouthValueRef.current ?? 0);
     } catch {}
 
-    // Auto-blink
     if (autoBlinkEnabled) {
       const bs = blinkStateRef.current;
       bs.elapsed += dt;
@@ -189,7 +182,6 @@ export function VRMAvatar(props: VRMAvatarProps) {
       }
     }
 
-    // Idle sway (balanceo inactivo)
     const hips = hipsBoneRef.current;
     const spine = spineBoneRef.current;
 

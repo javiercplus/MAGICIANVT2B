@@ -32,6 +32,7 @@ export default function Page() {
 
   const [gazeEnabled, setGazeEnabled] = useState(true);
   const [captureOutside, setCaptureOutside] = useState(false);
+  const [globalTracking, setGlobalTracking] = useState(false);
   const [micEnabled, setMicEnabled] = useState(false);
   const [autoBlinkEnabled, setAutoBlinkEnabled] = useState(true);
   const [randomEyesEnabled, setRandomEyesEnabled] = useState(false);
@@ -45,7 +46,7 @@ export default function Page() {
   const [isDragging, setIsDragging] = useState(false);
   const [controlsHidden, setControlsHidden] = useState(false);
 
-  const { desiredRef, currentRef } = useGazeTracking({ enabled: gazeEnabled, captureOutside });
+  const { desiredRef, currentRef } = useGazeTracking({ enabled: gazeEnabled, captureOutside, globalTracking });
   const { mouthValueRef, level, isReady: micReady, error: micError } = useLipSync(micEnabled);
   const { isRecording, durationSec: recordingSec, start: startRecording, stop: stopRecording, error: recordingError } = useScreenRecording();
   const { offsetRef: avatarOffsetRef } = useAvatarDrag();
@@ -73,6 +74,7 @@ export default function Page() {
     if (config) {
       if (config.gazeEnabled !== undefined) setGazeEnabled(config.gazeEnabled);
       if (config.captureOutside !== undefined) setCaptureOutside(config.captureOutside);
+      if (config.globalTracking !== undefined) setGlobalTracking(config.globalTracking);
       if (config.micEnabled !== undefined) setMicEnabled(config.micEnabled);
       if (config.autoBlinkEnabled !== undefined) setAutoBlinkEnabled(config.autoBlinkEnabled);
       if (config.randomEyesEnabled !== undefined) setRandomEyesEnabled(config.randomEyesEnabled);
@@ -193,9 +195,18 @@ export default function Page() {
     if (isRecording) stopRecording(); else startRecording();
   }, [isRecording, startRecording, stopRecording]);
 
+  const handleGlobalTrackingToggle = useCallback((v: boolean) => {
+    setGlobalTracking(v);
+    // Global tracking works everywhere, so pointer lock is redundant.
+    if (v && captureOutside) {
+      setCaptureOutside(false);
+      if (document.pointerLockElement) document.exitPointerLock();
+    }
+  }, [captureOutside]);
+
   const handleSaveConfig = useCallback(async () => {
     saveConfig({
-      gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, lighting
+      gazeEnabled, captureOutside, globalTracking, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, lighting
     });
     if (vrmUrl && vrmUrl !== DEFAULT_VRM_URL) {
       try {
@@ -206,7 +217,7 @@ export default function Page() {
         console.error('Failed to save VRM blob', e);
       }
     }
-  }, [gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, lighting, vrmUrl, vrmName]);
+  }, [gazeEnabled, captureOutside, globalTracking, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, lighting, vrmUrl, vrmName]);
 
   const displayVrmName = meta?.name || vrmName;
   const headerStatus = vrmStatus === 'loaded'
@@ -242,7 +253,7 @@ export default function Page() {
           </div>
         )}
 
-        {gazeEnabled && captureOutside && !document.pointerLockElement && (
+        {gazeEnabled && captureOutside && !globalTracking && !document.pointerLockElement && (
           <div className="absolute inset-0 z-10 flex items-end justify-center pb-24 pointer-events-none">
             <div className="bg-violet-900/80 border border-violet-500/50 text-violet-100 text-xs px-3 py-2 rounded-lg backdrop-blur-sm">
               Click the canvas to engage pointer lock · Press Esc to exit
@@ -270,7 +281,7 @@ export default function Page() {
         )}>
           <ControlPanel
             vrmName={displayVrmName} vrmStatus={vrmStatus} vrmError={effectiveVrmError}
-            gazeEnabled={gazeEnabled} captureOutside={captureOutside}
+            gazeEnabled={gazeEnabled} captureOutside={captureOutside} globalTracking={globalTracking}
             micEnabled={micEnabled} autoBlinkEnabled={autoBlinkEnabled}
             randomEyesEnabled={randomEyesEnabled} randomEyesIntensity={randomEyesIntensity}
             idleSwayEnabled={idleSwayEnabled} idleSwayIntensity={idleSwayIntensity}
@@ -279,6 +290,7 @@ export default function Page() {
             isRecording={isRecording} recordingSec={recordingSec}
             lighting={lighting}
             onGazeToggle={setGazeEnabled} onCaptureOutsideToggle={setCaptureOutside}
+            onGlobalTrackingToggle={handleGlobalTrackingToggle}
             onMicToggle={setMicEnabled} onAutoBlinkToggle={setAutoBlinkEnabled}
             onRandomEyesToggle={setRandomEyesEnabled} onRandomEyesIntensityChange={setRandomEyesIntensity}
             onIdleSwayToggle={setIdleSwayEnabled} onIdleSwayIntensityChange={setIdleSwayIntensity}

@@ -4,31 +4,37 @@ import { useEffect, useRef } from 'react';
 import { computeGazeTarget } from '@/lib/vrm/gazeMath';
 import type { GazeTarget } from '@/lib/vrm/constants';
 
-interface UseGazeTrackingOptions {
-  enabled: boolean;
-  // When true, request pointer lock on canvas click so the mouse can be
-  // tracked outside the browser window. User must click to engage (browser
-  // security). Esc to exit.
-  captureOutside?: boolean;
+interface ElectronCursorPos {
+  x: number;
+  y: number;
+  windowFocused?: boolean;
 }
 
-// Returns two refs the avatar reads in useFrame:
-//   desiredRef  - gaze target from most recent mousemove (or pointer lock delta)
-//   currentRef  - smoothed value; avatar lerps toward desiredRef each frame
-//
-// Behavior:
-//   enabled=false              -> avatar looks straight forward (gaze=0,0)
-//   enabled=true (no lock)    -> follow mouse; reset to forward when leaving window
-//   captureOutside=true        -> click canvas to engage pointer lock; movementX/Y
-//                                accumulate into virtual mouse position
+interface ElectronCursorAPI {
+  getGlobalCursor?: () => Promise<ElectronCursorPos | null>;
+  setGlobalTracking?: (enabled: boolean) => void;
+  onGlobalCursor?: (callback: (pos: ElectronCursorPos | null) => void) => () => void;
+}
+
+interface UseGazeTrackingOptions {
+  enabled: boolean;
+  captureOutside?: boolean;
+  globalTracking?: boolean;
+}
+
 export function useGazeTracking(options: UseGazeTrackingOptions) {
-  const { enabled, captureOutside = false } = options;
+  const { enabled, captureOutside = false, globalTracking = false } = options;
   const desiredRef = useRef<GazeTarget>({ x: 0, y: 0 });
   const currentRef = useRef<GazeTarget>({ x: 0, y: 0 });
   const hasMouseRef = useRef(false);
   const virtualMouseRef = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
+    const electronApi = (window as unknown as { electronAPI?: ElectronCursorAPI }).electronAPI;
+    const canPush = !!(electronApi?.setGlobalTracking && electronApi?.onGlobalCursor);
+    const canPoll = !!electronApi?.getGlobalCursor;
+    const useGlobal = globalTracking && (canPush || canPoll);
+
     const updateFromAbsolute = (clientX: number, clientY: number) => {
       desiredRef.current = computeGazeTarget(
         clientX, clientY, window.innerWidth, window.innerHeight
@@ -63,12 +69,12 @@ export function useGazeTracking(options: UseGazeTrackingOptions) {
 
     const resetToForward = () => { desiredRef.current = { x: 0, y: 0 }; };
     const onMouseLeave = () => {
-      if (!enabled || document.pointerLockElement) return;
+      if (!enabled || useGlobal || document.pointerLockElement) return;
       hasMouseRef.current = false;
       resetToForward();
     };
     const onBlur = () => {
-      if (!enabled || document.pointerLockElement) return;
+      if (!enabled || useGlobal || document.pointerLockElement) return;
       hasMouseRef.current = false;
       resetToForward();
     };
@@ -76,7 +82,7 @@ export function useGazeTracking(options: UseGazeTrackingOptions) {
       if (!document.pointerLockElement) virtualMouseRef.current = { x: 0, y: 0 };
     };
     const onCanvasClick = () => {
-      if (!enabled || !captureOutside || document.pointerLockElement) return;
+      if (!enabled || useGlobal || !captureOutside || document.pointerLockElement) return;
       const canvas = document.querySelector('canvas');
       (canvas as HTMLElement | null)?.requestPointerLock?.();
     };
@@ -88,9 +94,40 @@ export function useGazeTracking(options: UseGazeTrackingOptions) {
     const canvas = document.querySelector('canvas');
     canvas?.addEventListener('click', onCanvasClick);
 
+    const applyGlobal = (pos: ElectronCursorPos | null) => {
+      if (!pos) return;
+      hasMouseRef.current = true;
+      updateFromAbsolute(pos.x, pos.y);
+    };
+
+    let rafId = 0;
+    let cancelled = false;
+    let unsubscribe: (() => void) | null = null;
+
+    if (enabled && useGlobal && canPush && electronApi?.setGlobalTracking && electronApi?.onGlobalCursor) {
+      unsubscribe = electronApi.onGlobalCursor(applyGlobal);
+      electronApi.setGlobalTracking(true);
+    } else if (enabled && useGlobal && canPoll && electronApi?.getGlobalCursor) {
+      const getGlobalCursor = electronApi.getGlobalCursor;
+      const pollGlobal = async () => {
+        if (cancelled) return;
+        try {
+          applyGlobal(await getGlobalCursor());
+        } catch {
+          // ignore transient IPC errors
+        }
+        if (!cancelled) rafId = requestAnimationFrame(pollGlobal);
+      };
+      rafId = requestAnimationFrame(pollGlobal);
+    }
+
     if (!enabled) resetToForward();
 
     return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafId);
+      unsubscribe?.();
+      if (canPush) electronApi?.setGlobalTracking?.(false);
       window.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseleave', onMouseLeave);
       window.removeEventListener('blur', onBlur);
@@ -98,7 +135,7 @@ export function useGazeTracking(options: UseGazeTrackingOptions) {
       canvas?.removeEventListener('click', onCanvasClick);
       hasMouseRef.current = false;
     };
-  }, [enabled, captureOutside]);
+  }, [enabled, captureOutside, globalTracking]);
 
   return { desiredRef, currentRef, hasMouseRef };
 }

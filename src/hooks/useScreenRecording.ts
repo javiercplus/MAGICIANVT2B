@@ -10,9 +10,6 @@ interface UseScreenRecordingResult {
   error: string | null;
 }
 
-// Records the avatar canvas via MediaRecorder + canvas.captureStream.
-// Output is a .webm (or .mp4 on Safari) auto-downloaded on stop.
-// Works in Chromium / Firefox / Safari 14+ / Electron.
 export function useScreenRecording(): UseScreenRecordingResult {
   const [isRecording, setIsRecording] = useState(false);
   const [durationSec, setDurationSec] = useState(0);

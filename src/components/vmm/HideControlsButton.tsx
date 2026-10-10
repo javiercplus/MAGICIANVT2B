@@ -9,9 +9,6 @@ interface HideControlsButtonProps {
   className?: string;
 }
 
-// Floating button that toggles visibility of all UI chrome (header,
-// control panel, footer). Stays visible itself so the user can bring
-// the controls back. Positioned in the top-right corner by default.
 export function HideControlsButton({ hidden, onToggle, className }: HideControlsButtonProps) {
   return (
     <button

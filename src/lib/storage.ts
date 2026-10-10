@@ -1,6 +1,7 @@
 export interface SavedConfig {
   gazeEnabled?: boolean;
   captureOutside?: boolean;
+  globalTracking?: boolean;
   micEnabled?: boolean;
   autoBlinkEnabled?: boolean;
   randomEyesEnabled?: boolean;

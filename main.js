@@ -1,23 +1,63 @@
-const { app, BrowserWindow, session, protocol, net, ipcMain, screen } = require('electron');
 const path = require('path');
+const fs = require('fs');
+const { spawn } = require('child_process');
 const { pathToFileURL } = require('url');
+
+let app, BrowserWindow, session, protocol, net, ipcMain, screen;
+
+// Native Wayland forbids reading the global cursor, so screen.getCursorScreenPoint()
+// returns (0,0) and gaze tracking cannot follow the pointer outside the window.
+// The ozone platform can only be chosen before Chromium starts, so when XWayland
+// is available we relaunch ourselves on the X11 backend. Opt out with
+// MAGICIAN_NO_XWAYLAND=1; the child sets MAGICIAN_XWAYLAND=1 to avoid looping.
+function relaunchOnWaylandForX11() {
+  if (process.platform !== 'linux' || process.env.MAGICIAN_NO_XWAYLAND === '1') return false;
+  if (process.env.MAGICIAN_XWAYLAND === '1') return false;
+  const isWayland = !!process.env.WAYLAND_DISPLAY || process.env.XDG_SESSION_TYPE === 'wayland';
+  if (!isWayland) return false;
+
+  let display = process.env.DISPLAY;
+  if (!display || !/^:\d+/.test(display)) {
+    try {
+      const socket = fs.readdirSync('/tmp/.X11-unix').find((f) => /^X\d+$/.test(f));
+      if (socket) display = ':' + socket.slice(1);
+    } catch {}
+  }
+  if (!display || !/^:\d+/.test(display)) return false;
+
+  const child = spawn(process.execPath, [...process.argv.slice(1), '--ozone-platform=x11'], {
+    env: { ...process.env, DISPLAY: display, MAGICIAN_XWAYLAND: '1' },
+    stdio: 'inherit',
+  });
+  child.on('exit', (code, signal) => {
+    if (signal) process.kill(process.pid, signal);
+    else process.exit(code ?? 0);
+  });
+  return true;
+}
+
+const relaunchedOnX11 = relaunchOnWaylandForX11();
 
 // Serve the statically exported Next.js build over a custom protocol.
 // Using file:// directly breaks the UI because Next emits absolute asset
 // paths (/_next/..., /models/..., /logo.svg) that would resolve to the
 // filesystem root instead of the `out/` directory.
-protocol.registerSchemesAsPrivileged([
-  {
-    scheme: 'app',
-    privileges: {
-      standard: true,
-      secure: true,
-      supportFetchAPI: true,
-      stream: true,
-      corsEnabled: true,
+if (!relaunchedOnX11) {
+  ({ app, BrowserWindow, session, protocol, net, ipcMain, screen } = require('electron'));
+
+  protocol.registerSchemesAsPrivileged([
+    {
+      scheme: 'app',
+      privileges: {
+        standard: true,
+        secure: true,
+        supportFetchAPI: true,
+        stream: true,
+        corsEnabled: true,
+      },
     },
-  },
-]);
+  ]);
+}
 
 const OUT_DIR = path.join(__dirname, 'out');
 
@@ -116,6 +156,62 @@ function setupWindowResizing() {
   });
 }
 
+// DOM mousemove events only fire while the cursor is over the window. To let
+// the avatar gaze follow the pointer anywhere on the screen, the renderer asks
+// the main process for the global cursor position. We translate screen
+// coordinates into window-local coordinates so the renderer can reuse the same
+// gaze math it uses for in-window mouse events.
+//
+// If we are stuck on native Wayland (relaunch failed) the global cursor is
+// unreadable and getCursorScreenPoint() returns (0,0). Returning that would pin
+// the gaze to a bogus origin, so we return null and let the renderer fall back
+// to in-window tracking.
+function globalCursorBlocked() {
+  return process.platform === 'linux'
+    && process.env.MAGICIAN_XWAYLAND !== '1'
+    && (!!process.env.WAYLAND_DISPLAY || process.env.XDG_SESSION_TYPE === 'wayland');
+}
+
+function readGlobalCursor(sender) {
+  const win = BrowserWindow.fromWebContents(sender);
+  if (!win || win.isDestroyed() || globalCursorBlocked()) return null;
+  const cursor = screen.getCursorScreenPoint();
+  const bounds = win.getBounds();
+  return {
+    x: cursor.x - bounds.x,
+    y: cursor.y - bounds.y,
+    windowFocused: win.isFocused(),
+  };
+}
+
+function setupGlobalCursor() {
+  // The renderer cannot poll reliably on its own: requestAnimationFrame (and
+  // timers) are throttled or paused when the window is unfocused or occluded,
+  // which is exactly when the pointer is outside the window. So the main process
+  // pushes cursor updates on a timer that is not tied to renderer visibility.
+  const timers = new Map();
+
+  const stop = (id) => {
+    const timer = timers.get(id);
+    if (timer) { clearInterval(timer); timers.delete(id); }
+  };
+
+  ipcMain.handle('gaze:get-global-cursor', (event) => readGlobalCursor(event.sender));
+
+  ipcMain.on('gaze:set-tracking', (event, enabled) => {
+    const sender = event.sender;
+    stop(sender.id);
+    if (!enabled) return;
+
+    const timer = setInterval(() => {
+      if (sender.isDestroyed()) { stop(sender.id); return; }
+      const pos = readGlobalCursor(sender);
+      if (pos) sender.send('gaze:cursor', pos);
+    }, 16);
+    timers.set(sender.id, timer);
+  });
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1280,
@@ -129,6 +225,7 @@ function createWindow() {
     hasShadow: true,
     resizable: true,
     webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: true,
       contextIsolation: false,
       sandbox: false,
@@ -161,20 +258,23 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(() => {
-  registerAppProtocol();
-  setupWindowResizing();
-  createWindow();
+if (!relaunchedOnX11) {
+  app.whenReady().then(() => {
+    registerAppProtocol();
+    setupWindowResizing();
+    setupGlobalCursor();
+    createWindow();
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      }
+    });
+  });
+
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') {
+      app.quit();
     }
   });
-});
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
+}

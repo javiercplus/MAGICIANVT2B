@@ -44,9 +44,6 @@ const HANDLES: Array<{ dir: ResizeDir; className: string }> = [
   { dir: 'se', className: 'bottom-0 right-0 w-4 h-4 cursor-nwse-resize' },
 ];
 
-// Invisible edge/corner grabbers that let the user resize the frameless
-// Electron window. A subtle frame highlights while the edges are hovered or
-// dragged so the window bounds (and the resize affordance) are discoverable.
 export function WindowResizeHandles() {
   const ipc = useSyncExternalStore(
     subscribe,

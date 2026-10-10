@@ -3,7 +3,7 @@
 import {
   MousePointerClick, Mic, Eye, Upload, RotateCcw, AlertCircle,
   Loader2, CircleCheck, Square, Circle, Palette, Crosshair,
-  Image as ImageIcon, Sun, RotateCw, Save, Activity, Dna,
+  Image as ImageIcon, Sun, RotateCw, Save, Activity, Dna, Monitor,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ interface ControlPanelProps {
   vrmError: string | null;
   gazeEnabled: boolean;
   captureOutside: boolean;
+  globalTracking: boolean;
   micEnabled: boolean;
   autoBlinkEnabled: boolean;
   randomEyesEnabled: boolean;
@@ -40,6 +41,7 @@ interface ControlPanelProps {
   lighting: LightingConfig;
   onGazeToggle: (v: boolean) => void;
   onCaptureOutsideToggle: (v: boolean) => void;
+  onGlobalTrackingToggle: (v: boolean) => void;
   onMicToggle: (v: boolean) => void;
   onAutoBlinkToggle: (v: boolean) => void;
   onRandomEyesToggle: (v: boolean) => void;
@@ -177,11 +179,11 @@ function LightSection({
 export function ControlPanel(props: ControlPanelProps) {
   const {
     vrmName, vrmStatus, vrmError,
-    gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, hasBackground,
+    gazeEnabled, captureOutside, globalTracking, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, hasBackground,
     micLevel, micReady, micError,
     isRecording, recordingSec,
     lighting,
-    onGazeToggle, onCaptureOutsideToggle, onMicToggle, onAutoBlinkToggle, onRandomEyesToggle, onRandomEyesIntensityChange, onIdleSwayToggle, onIdleSwayIntensityChange, onGreenScreenToggle,
+    onGazeToggle, onCaptureOutsideToggle, onGlobalTrackingToggle, onMicToggle, onAutoBlinkToggle, onRandomEyesToggle, onRandomEyesIntensityChange, onIdleSwayToggle, onIdleSwayIntensityChange, onGreenScreenToggle,
     onLightingChange,
     onPickFile, onResetVRM, onPickBackground, onClearBackground, onRecordToggle, onSaveConfig,
   } = props;
@@ -201,11 +203,12 @@ export function ControlPanel(props: ControlPanelProps) {
 
       <CardContent className="p-3 pt-0">
         <Tabs defaultValue="avatar" className="w-full">
-          <TabsList className="grid w-full grid-cols-4 bg-zinc-800/60 h-8">
-            <TabsTrigger value="avatar" className="text-[10px] uppercase tracking-wider">Avatar</TabsTrigger>
-            <TabsTrigger value="motion" className="text-[10px] uppercase tracking-wider">Motion</TabsTrigger>
-            <TabsTrigger value="scene" className="text-[10px] uppercase tracking-wider">Scene</TabsTrigger>
-            <TabsTrigger value="lighting" className="text-[10px] uppercase tracking-wider">Light</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-5 bg-zinc-800/60 h-8">
+            <TabsTrigger value="avatar" className="text-[9px] uppercase tracking-wider">Avatar</TabsTrigger>
+            <TabsTrigger value="tracking" className="text-[9px] uppercase tracking-wider">Tracking</TabsTrigger>
+            <TabsTrigger value="motion" className="text-[9px] uppercase tracking-wider">Motion</TabsTrigger>
+            <TabsTrigger value="scene" className="text-[9px] uppercase tracking-wider">Scene</TabsTrigger>
+            <TabsTrigger value="lighting" className="text-[9px] uppercase tracking-wider">Light</TabsTrigger>
           </TabsList>
 
           <TabsContent value="avatar" className="mt-3 space-y-3">
@@ -248,13 +251,19 @@ export function ControlPanel(props: ControlPanelProps) {
             )}
           </TabsContent>
 
-          <TabsContent value="motion" className="mt-3 space-y-3">
+          <TabsContent value="tracking" className="mt-3 space-y-3">
             <ScrollArea className="max-h-[400px]">
               <div className="space-y-1 pr-1">
                 <ToggleRow icon={<MousePointerClick className="w-4 h-4" />}
                   label="Gaze Tracking" description="Head + eyes follow mouse. Off = forward."
                   checked={gazeEnabled} onCheckedChange={onGazeToggle} accentClass="bg-violet-500/20 text-violet-300" />
                 {gazeEnabled && (
+                  <ToggleRow icon={<Monitor className="w-3.5 h-3.5" />}
+                    label="Global Tracking" description="Follow cursor even outside the window."
+                    checked={globalTracking} onCheckedChange={onGlobalTrackingToggle}
+                    accentClass="bg-emerald-500/20 text-emerald-300" indent />
+                )}
+                {gazeEnabled && !globalTracking && (
                   <ToggleRow icon={<Crosshair className="w-3.5 h-3.5" />}
                     label="Capture Outside" description="Pointer lock: click canvas, Esc to exit."
                     checked={captureOutside} onCheckedChange={onCaptureOutsideToggle}
@@ -276,6 +285,16 @@ export function ControlPanel(props: ControlPanelProps) {
                     />
                   </div>
                 )}
+              </div>
+            </ScrollArea>
+            <p className="text-[10px] text-zinc-500 leading-snug">
+              Global Tracking reads the system cursor. On Wayland the app relaunches on X11 (XWayland) so it works; opt out with MAGICIAN_NO_XWAYLAND=1.
+            </p>
+          </TabsContent>
+
+          <TabsContent value="motion" className="mt-3 space-y-3">
+            <ScrollArea className="max-h-[400px]">
+              <div className="space-y-1 pr-1">
                 <ToggleRow icon={<Mic className="w-4 h-4" />}
                   label="LipSync (Mic)" description="Mouth open from mic amplitude."
                   checked={micEnabled} onCheckedChange={onMicToggle} accentClass="bg-fuchsia-500/20 text-fuchsia-300" />

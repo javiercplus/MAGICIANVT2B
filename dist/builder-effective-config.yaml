@@ -7,6 +7,7 @@ files:
   - filter:
       - out/**/*
       - main.js
+      - preload.js
 linux:
   target: AppImage
 win:
