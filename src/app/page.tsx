@@ -8,6 +8,7 @@ import { ControlPanel } from '@/components/vmm/ControlPanel';
 import { Header } from '@/components/vmm/Header';
 import { DropZone } from '@/components/vmm/DropZone';
 import { HideControlsButton } from '@/components/vmm/HideControlsButton';
+import { WindowResizeHandles } from '@/components/vmm/WindowResizeHandles';
 import { useGazeTracking } from '@/hooks/useGazeTracking';
 import { useLipSync } from '@/hooks/useLipSync';
 import { useScreenRecording } from '@/hooks/useScreenRecording';
@@ -217,6 +218,7 @@ export default function Page() {
 
   return (
     <div className="flex flex-col min-h-screen bg-zinc-950 text-zinc-100">
+      <WindowResizeHandles />
       <main className="relative flex-1 min-h-0">
         <div className="absolute inset-0">
           <VRMScene
