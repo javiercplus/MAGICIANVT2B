@@ -50,7 +50,6 @@ export function WindowResizeHandles() {
     getIpcRenderer,
     () => null
   );
-  const [hovering, setHovering] = useState(false);
   const [active, setActive] = useState(false);
 
   useEffect(() => {
@@ -84,22 +83,10 @@ export function WindowResizeHandles() {
 
   return (
     <div className="fixed inset-0 z-[100] pointer-events-none" aria-hidden>
-      <div
-        className={cn(
-          'absolute inset-0 border-2 rounded-sm transition-colors duration-150',
-          active
-            ? 'border-violet-400'
-            : hovering
-              ? 'border-violet-400'
-              : 'border-violet-500/70'
-        )}
-      />
       {HANDLES.map(({ dir, className }) => (
         <div
           key={dir}
           onPointerDown={handlePointerDown(dir)}
-          onPointerEnter={() => setHovering(true)}
-          onPointerLeave={() => setHovering(false)}
           className={cn('absolute pointer-events-auto touch-none', className)}
         />
       ))}

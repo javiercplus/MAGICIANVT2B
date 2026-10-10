@@ -213,6 +213,24 @@ function setupGlobalCursor() {
 }
 
 function createWindow() {
+  const isMac = process.platform === 'darwin';
+
+  // Keep the frameless look while delegating the close/minimize/maximize
+  // buttons to the OS. On Windows and Linux `titleBarOverlay` draws the native
+  // caption buttons over the custom UI; on macOS `hiddenInset` keeps the
+  // traffic lights. The custom resize border is retained for Linux, where
+  // frameless windows cannot rely on the window manager for resizing.
+  const titleBarOptions = isMac
+    ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 14 } }
+    : {
+        titleBarStyle: 'hidden',
+        titleBarOverlay: {
+          color: '#0b0b12',
+          symbolColor: '#e4e4e7',
+          height: 36,
+        },
+      };
+
   const win = new BrowserWindow({
     width: 1280,
     height: 720,
@@ -221,7 +239,7 @@ function createWindow() {
     // NOTE: transparent frameless windows cannot be resized on Linux, so the
     // window is opaque here and the app draws its own visible border instead.
     backgroundColor: '#0b0b12',
-    frame: false,
+    ...titleBarOptions,
     hasShadow: true,
     resizable: true,
     webPreferences: {
