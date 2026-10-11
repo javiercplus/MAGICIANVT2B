@@ -3,7 +3,7 @@
 import {
   MousePointerClick, Mic, Eye, Upload, RotateCcw, AlertCircle,
   Loader2, CircleCheck, Square, Circle, Palette, Crosshair,
-  Image as ImageIcon, Sun, RotateCw, Save, Activity, Dna,
+  Image as ImageIcon, Sun, Save, Activity, Dna, SlidersHorizontal, ZoomIn,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,7 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
-import type { LightingConfig, LightConfig } from '@/lib/vrm/constants';
+import { ZOOM, type LightingConfig, type AdjustConfig } from '@/lib/vrm/constants';
 
 interface ControlPanelProps {
   vrmName: string;
@@ -38,6 +38,8 @@ interface ControlPanelProps {
   isRecording: boolean;
   recordingSec: number;
   lighting: LightingConfig;
+  adjust: AdjustConfig;
+  zoom: number;
   onGazeToggle: (v: boolean) => void;
   onCaptureOutsideToggle: (v: boolean) => void;
   onMicToggle: (v: boolean) => void;
@@ -48,6 +50,8 @@ interface ControlPanelProps {
   onIdleSwayIntensityChange: (v: number) => void;
   onGreenScreenToggle: (v: boolean) => void;
   onLightingChange: (l: LightingConfig) => void;
+  onAdjustChange: (a: AdjustConfig) => void;
+  onZoomChange: (z: number) => void;
   onPickFile: () => void;
   onResetVRM: () => void;
   onPickBackground: () => void;
@@ -139,50 +143,15 @@ function LightSlider({ label, value, min, max, step, unit, decimals = 2, onChang
   );
 }
 
-function LightSection({
-  name, icon, light, onChange,
-}: {
-  name: string;
-  icon: React.ReactNode;
-  light: LightConfig;
-  onChange: (l: LightConfig) => void;
-}) {
-  return (
-    <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
-      <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
-        {icon}
-        {name}
-      </div>
-      <LightSlider
-        label="Angle"
-        value={light.angle}
-        min={0}
-        max={360}
-        step={1}
-        unit="°"
-        onChange={(v) => onChange({ ...light, angle: v })}
-      />
-      <LightSlider
-        label="Intensity"
-        value={light.intensity}
-        min={0}
-        max={3}
-        step={0.05}
-        onChange={(v) => onChange({ ...light, intensity: v })}
-      />
-    </div>
-  );
-}
-
 export function ControlPanel(props: ControlPanelProps) {
   const {
     vrmName, vrmStatus, vrmError,
     gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, hasBackground,
     micLevel, micReady, micError,
     isRecording, recordingSec,
-    lighting,
+    lighting, adjust, zoom,
     onGazeToggle, onCaptureOutsideToggle, onMicToggle, onAutoBlinkToggle, onRandomEyesToggle, onRandomEyesIntensityChange, onIdleSwayToggle, onIdleSwayIntensityChange, onGreenScreenToggle,
-    onLightingChange,
+    onLightingChange, onAdjustChange, onZoomChange,
     onPickFile, onResetVRM, onPickBackground, onClearBackground, onRecordToggle, onSaveConfig,
   } = props;
 
@@ -201,11 +170,12 @@ export function ControlPanel(props: ControlPanelProps) {
 
       <CardContent className="p-3 pt-0">
         <Tabs defaultValue="avatar" className="w-full">
-          <TabsList className="grid w-full grid-cols-4 bg-zinc-800/60 h-8">
+          <TabsList className="grid w-full grid-cols-5 bg-zinc-800/60 h-8">
             <TabsTrigger value="avatar" className="text-[10px] uppercase tracking-wider">Avatar</TabsTrigger>
             <TabsTrigger value="motion" className="text-[10px] uppercase tracking-wider">Motion</TabsTrigger>
             <TabsTrigger value="scene" className="text-[10px] uppercase tracking-wider">Scene</TabsTrigger>
             <TabsTrigger value="lighting" className="text-[10px] uppercase tracking-wider">Light</TabsTrigger>
+            <TabsTrigger value="adjust" className="text-[10px] uppercase tracking-wider">Adjust</TabsTrigger>
           </TabsList>
 
           <TabsContent value="avatar" className="mt-3 space-y-3">
@@ -324,38 +294,104 @@ export function ControlPanel(props: ControlPanelProps) {
                 checked={hasBackground} onCheckedChange={(v) => v ? onPickBackground() : onClearBackground()}
                 accentClass="bg-sky-500/20 text-sky-300" />
             </div>
+
+            <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
+              <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
+                <ZoomIn className="w-3.5 h-3.5 text-violet-300" />Zoom
+              </div>
+              <LightSlider
+                label="Camera zoom"
+                value={zoom}
+                min={ZOOM.MIN}
+                max={ZOOM.MAX}
+                step={0.05}
+                onChange={onZoomChange}
+              />
+              <p className="text-[10px] text-zinc-500 leading-snug">
+                Scroll the mouse wheel over the canvas to zoom.
+              </p>
+            </div>
           </TabsContent>
 
           <TabsContent value="lighting" className="mt-3 space-y-2">
             <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
               <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
-                <Sun className="w-3.5 h-3.5" />Ambient
+                <Sun className="w-3.5 h-3.5 text-amber-300" />Front
               </div>
               <LightSlider
                 label="Intensity"
-                value={lighting.ambient}
+                value={lighting.front}
                 min={0}
-                max={2}
+                max={3}
                 step={0.05}
-                onChange={(v) => onLightingChange({ ...lighting, ambient: v })}
+                onChange={(v) => onLightingChange({ ...lighting, front: v })}
               />
             </div>
 
-            <LightSection name="Key" icon={<Sun className="w-3.5 h-3.5 text-amber-300" />}
-              light={lighting.key}
-              onChange={(l) => onLightingChange({ ...lighting, key: l })} />
-            <LightSection name="Fill" icon={<Sun className="w-3.5 h-3.5 text-sky-300" />}
-              light={lighting.fill}
-              onChange={(l) => onLightingChange({ ...lighting, fill: l })} />
-            <LightSection name="Rim" icon={<Sun className="w-3.5 h-3.5 text-violet-300" />}
-              light={lighting.rim}
-              onChange={(l) => onLightingChange({ ...lighting, rim: l })} />
-            <LightSection name="Back" icon={<RotateCw className="w-3.5 h-3.5 text-zinc-300" />}
-              light={lighting.back}
-              onChange={(l) => onLightingChange({ ...lighting, back: l })} />
+            <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
+              <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
+                <Sun className="w-3.5 h-3.5 text-sky-300" />Top
+              </div>
+              <LightSlider
+                label="Intensity"
+                value={lighting.top}
+                min={0}
+                max={3}
+                step={0.05}
+                onChange={(v) => onLightingChange({ ...lighting, top: v })}
+              />
+            </div>
 
             <p className="text-[10px] text-zinc-500 leading-snug pt-1">
-              Angle: 0° = front, 90° = right, 180° = back, 270° = left.
+              Front light faces the avatar; Top light comes from above. Ambient base is fixed.
+            </p>
+          </TabsContent>
+
+          <TabsContent value="adjust" className="mt-3 space-y-2">
+            <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
+              <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
+                <SlidersHorizontal className="w-3.5 h-3.5 text-amber-300" />Brightness
+              </div>
+              <LightSlider
+                label="Amount"
+                value={adjust.brightness}
+                min={0}
+                max={2}
+                step={0.05}
+                onChange={(v) => onAdjustChange({ ...adjust, brightness: v })}
+              />
+            </div>
+
+            <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
+              <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
+                <SlidersHorizontal className="w-3.5 h-3.5 text-fuchsia-300" />Saturation
+              </div>
+              <LightSlider
+                label="Amount"
+                value={adjust.saturation}
+                min={0}
+                max={2}
+                step={0.05}
+                onChange={(v) => onAdjustChange({ ...adjust, saturation: v })}
+              />
+            </div>
+
+            <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
+              <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
+                <SlidersHorizontal className="w-3.5 h-3.5 text-sky-300" />Contrast
+              </div>
+              <LightSlider
+                label="Amount"
+                value={adjust.contrast}
+                min={0}
+                max={2}
+                step={0.05}
+                onChange={(v) => onAdjustChange({ ...adjust, contrast: v })}
+              />
+            </div>
+
+            <p className="text-[10px] text-zinc-500 leading-snug pt-1">
+              Color adjustments apply to the rendered avatar and are included in recordings.
             </p>
           </TabsContent>
         </Tabs>
