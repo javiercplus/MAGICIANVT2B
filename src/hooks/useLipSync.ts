@@ -29,6 +29,7 @@ export function useLipSync(enabled: boolean): UseLipSyncResult {
     let stream: MediaStream | null = null;
     let rafId: number | null = null;
     let lastUiUpdate = 0;
+    let lastTick = 0;
     let cancelled = false;
 
     async function setup() {
@@ -46,8 +47,12 @@ export function useLipSync(enabled: boolean): UseLipSyncResult {
         source.connect(analyser);
 
         const buffer = new Uint8Array(analyser.fftSize);
+        lastTick = performance.now();
         const tick = () => {
           if (!analyser || cancelled) return;
+          const now = performance.now();
+          const dt = Math.min((now - lastTick) / 1000, 0.1);
+          lastTick = now;
           analyser.getByteTimeDomainData(buffer);
           let sum = 0;
           for (let i = 0; i < buffer.length; i++) {
@@ -61,11 +66,15 @@ export function useLipSync(enabled: boolean): UseLipSyncResult {
             factor = (db - LIPSYNC.DB_MIN) / (LIPSYNC.DB_MAX - LIPSYNC.DB_MIN);
             factor = Math.max(LIPSYNC.VOLUME_FACTOR_CLAMP_MIN, Math.min(1, factor));
           }
-          mouthValueRef.current = factor;
-          const now = performance.now();
+          // Fast attack when sound arrives, slow release (hold) so the mouth
+          // closes smoothly over a few seconds instead of snapping shut.
+          const prev = mouthValueRef.current;
+          const speed = factor > prev ? LIPSYNC.ATTACK_SPEED : LIPSYNC.RELEASE_SPEED;
+          const next = prev + (factor - prev) * Math.min(1, dt * speed);
+          mouthValueRef.current = next;
           if (now - lastUiUpdate > 100) {
             lastUiUpdate = now;
-            setLevel(factor);
+            setLevel(next);
           }
           rafId = requestAnimationFrame(tick);
         };
