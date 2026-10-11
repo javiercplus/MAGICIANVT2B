@@ -10,12 +10,13 @@ import { DropZone } from '@/components/vmm/DropZone';
 import { HideControlsButton } from '@/components/vmm/HideControlsButton';
 import { WindowResizeHandles } from '@/components/vmm/WindowResizeHandles';
 import { WindowTitleBar } from '@/components/vmm/WindowTitleBar';
+import { HelpButton } from '@/components/vmm/HelpButton';
 import { useGazeTracking } from '@/hooks/useGazeTracking';
 import { useLipSync } from '@/hooks/useLipSync';
 import { useScreenRecording } from '@/hooks/useScreenRecording';
 import { useAvatarDrag } from '@/hooks/useAvatarDrag';
 import { cn } from '@/lib/utils';
-import { DEFAULT_LIGHTING, type LightingConfig } from '@/lib/vrm/constants';
+import { DEFAULT_LIGHTING, DEFAULT_ADJUST, ZOOM, type LightingConfig, type AdjustConfig } from '@/lib/vrm/constants';
 import type { LoadVRMResult } from '@/lib/vrm/loadVRM';
 import { saveVrmToIndexedDB, loadVrmFromIndexedDB, saveConfig, loadConfig } from '@/lib/storage';
 
@@ -43,6 +44,8 @@ export default function Page() {
   const [greenScreen, setGreenScreen] = useState(false);
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
   const [lighting, setLighting] = useState<LightingConfig>(DEFAULT_LIGHTING);
+  const [adjust, setAdjust] = useState<AdjustConfig>(DEFAULT_ADJUST);
+  const [zoom, setZoom] = useState<number>(ZOOM.DEFAULT);
 
   const [isDragging, setIsDragging] = useState(false);
   const [controlsHidden, setControlsHidden] = useState(false);
@@ -83,7 +86,21 @@ export default function Page() {
       if (config.idleSwayEnabled !== undefined) setIdleSwayEnabled(config.idleSwayEnabled);
       if (config.idleSwayIntensity !== undefined) setIdleSwayIntensity(config.idleSwayIntensity);
       if (config.greenScreen !== undefined) setGreenScreen(config.greenScreen);
-      if (config.lighting !== undefined) setLighting(config.lighting);
+      if (config.lighting !== undefined) {
+        const l = config.lighting;
+        if (typeof l?.front === 'number' && typeof l?.top === 'number') {
+          setLighting({ front: l.front, top: l.top });
+        }
+      }
+      if (config.adjust !== undefined) {
+        const a = config.adjust;
+        if (typeof a?.brightness === 'number' && typeof a?.saturation === 'number' && typeof a?.contrast === 'number') {
+          setAdjust({ brightness: a.brightness, saturation: a.saturation, contrast: a.contrast });
+        }
+      }
+      if (typeof config.zoom === 'number') {
+        setZoom(Math.min(Math.max(config.zoom, ZOOM.MIN), ZOOM.MAX));
+      }
     }
     loadVrmFromIndexedDB().then((data) => {
       if (data) {
@@ -207,7 +224,7 @@ export default function Page() {
 
   const handleSaveConfig = useCallback(async () => {
     saveConfig({
-      gazeEnabled, captureOutside, globalTracking, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, lighting
+      gazeEnabled, captureOutside, globalTracking, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, lighting, adjust, zoom
     });
     if (vrmUrl && vrmUrl !== DEFAULT_VRM_URL) {
       try {
@@ -218,7 +235,7 @@ export default function Page() {
         console.error('Failed to save VRM blob', e);
       }
     }
-  }, [gazeEnabled, captureOutside, globalTracking, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, lighting, vrmUrl, vrmName]);
+  }, [gazeEnabled, captureOutside, globalTracking, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, lighting, adjust, zoom, vrmUrl, vrmName]);
 
   const displayVrmName = meta?.name || vrmName;
   const headerStatus = vrmStatus === 'loaded'
@@ -242,6 +259,9 @@ export default function Page() {
             mouthValueRef={mouthValueRef} avatarOffsetRef={avatarOffsetRef}
             greenScreen={greenScreen} backgroundImageUrl={backgroundImageUrl}
             lighting={lighting}
+            adjust={adjust}
+            zoom={zoom}
+            onZoomChange={setZoom}
             onLoaded={handleLoaded} onError={handleError}
           />
         </div>
@@ -263,7 +283,8 @@ export default function Page() {
           </div>
         )}
 
-        <div className="absolute top-4 right-4 z-50">
+        <div className="absolute top-4 right-4 z-50 flex flex-col gap-2">
+          <HelpButton />
           <HideControlsButton
             hidden={controlsHidden}
             onToggle={() => setControlsHidden((v) => !v)}
@@ -291,6 +312,8 @@ export default function Page() {
             micLevel={level} micReady={micReady} micError={micError}
             isRecording={isRecording} recordingSec={recordingSec}
             lighting={lighting}
+            adjust={adjust}
+            zoom={zoom}
             onGazeToggle={setGazeEnabled} onCaptureOutsideToggle={setCaptureOutside}
             onGlobalTrackingToggle={handleGlobalTrackingToggle}
             onMicToggle={setMicEnabled} onAutoBlinkToggle={setAutoBlinkEnabled}
@@ -298,6 +321,8 @@ export default function Page() {
             onIdleSwayToggle={setIdleSwayEnabled} onIdleSwayIntensityChange={setIdleSwayIntensity}
             onGreenScreenToggle={setGreenScreen}
             onLightingChange={setLighting}
+            onAdjustChange={setAdjust}
+            onZoomChange={setZoom}
             onPickFile={handlePickFile} onResetVRM={handleResetVRM}
             onPickBackground={handlePickBackground} onClearBackground={handleClearBackground}
             onRecordToggle={handleRecordToggle}

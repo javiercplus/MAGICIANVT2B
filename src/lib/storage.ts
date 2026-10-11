@@ -10,6 +10,8 @@ export interface SavedConfig {
   idleSwayIntensity?: number;
   greenScreen?: boolean;
   lighting?: any; // LightingConfig
+  adjust?: any; // AdjustConfig
+  zoom?: number;
 }
 
 const DB_NAME = 'MagicianVrmDB';

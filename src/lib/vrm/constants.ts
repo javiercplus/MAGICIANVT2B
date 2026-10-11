@@ -72,41 +72,46 @@ export const SCENE = {
   BACKGROUND: '#0b0b12',
   FLOOR_COLOR: '#15151f',
   LIGHT_AMBIENT: '#6a7090',
-  LIGHT_KEY: '#ffffff',
-  LIGHT_FILL: '#8893b3',
-  LIGHT_RIM: '#7c5cff',
-  LIGHT_BACK: '#b8c5e6',
+  LIGHT_FRONT: '#ffffff',
+  LIGHT_TOP: '#c7d2fe',
 } as const;
 
-export interface LightConfig {
-  angle: number;     // azimuth degrees, 0 = front (+Z), 90 = right (+X)
-  intensity: number; // 0..3
-}
+export const ZOOM = {
+  MIN: 0.5,
+  MAX: 3,
+  DEFAULT: 1,
+  WHEEL_SENSITIVITY: 0.001,
+} as const;
 
 export interface LightingConfig {
-  ambient: number;
-  key: LightConfig;
-  fill: LightConfig;
-  rim: LightConfig;
-  back: LightConfig;
+  front: number; // front light intensity, 0..3
+  top: number;   // top light intensity, 0..3
 }
 
 export const DEFAULT_LIGHTING: LightingConfig = {
-  ambient: 0.4,
-  key: { angle: 30, intensity: 1.5 },
-  fill: { angle: 210, intensity: 0.5 },
-  rim: { angle: 180, intensity: 0.6 },
-  back: { angle: 0, intensity: 0.3 },
+  front: 1.4,
+  top: 1.0,
+};
+
+export interface AdjustConfig {
+  brightness: number; // 0..2, 1 = neutral
+  saturation: number; // 0..2, 1 = neutral
+  contrast: number;   // 0..2, 1 = neutral
+}
+
+export const DEFAULT_ADJUST: AdjustConfig = {
+  brightness: 1,
+  saturation: 1,
+  contrast: 1,
 };
 
 export const LIGHTING = {
-  RADIUS: 2.5,
-  HEIGHTS: {
-    key: 2.0,
-    fill: 1.0,
-    rim: 1.4,
-    back: 2.6,
-  },
+  // Soft base so the avatar is never pitch black; not user-configurable.
+  AMBIENT_INTENSITY: 0.35,
+  // Front light: in front of the avatar at face/chest height.
+  FRONT_POSITION: [0, 1.4, 2.5] as [number, number, number],
+  // Top light: above the avatar, slightly forward for a natural shadow.
+  TOP_POSITION: [0, 3.5, 0.8] as [number, number, number],
 } as const;
 
 export type GazeTarget = {

@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { VRMAvatar } from './VRMAvatar';
-import { SCENE, GREEN_SCREEN, LIGHTING, type LightingConfig } from '@/lib/vrm/constants';
+import { PostFX } from './PostFX';
+import { SCENE, ZOOM, GREEN_SCREEN, LIGHTING, type LightingConfig, type AdjustConfig } from '@/lib/vrm/constants';
 import type { GazeTarget } from '@/lib/vrm/constants';
 import type { LoadVRMResult } from '@/lib/vrm/loadVRM';
 
@@ -23,13 +24,11 @@ interface VRMSceneProps {
   greenScreen?: boolean;
   backgroundImageUrl?: string | null;
   lighting: LightingConfig;
+  adjust: AdjustConfig;
+  zoom: number;
+  onZoomChange?: (z: number) => void;
   onLoaded?: (result: LoadVRMResult) => void;
   onError?: (err: Error) => void;
-}
-
-function lightPosition(angle: number, height: number): [number, number, number] {
-  const rad = THREE.MathUtils.degToRad(angle);
-  return [LIGHTING.RADIUS * Math.sin(rad), height, LIGHTING.RADIUS * Math.cos(rad)];
 }
 
 function BackgroundImage({ url }: { url: string }) {
@@ -54,19 +53,46 @@ function BackgroundImage({ url }: { url: string }) {
   return null;
 }
 
+function applyCameraZoom(camera: THREE.Camera, zoom: number) {
+  const cam = camera as THREE.PerspectiveCamera;
+  if (Math.abs(cam.zoom - zoom) > 1e-4) {
+    cam.zoom = zoom;
+    cam.updateProjectionMatrix();
+  }
+}
+
+function CameraRig({ zoom, onZoomChange }: { zoom: number; onZoomChange?: (z: number) => void }) {
+  const { camera, gl } = useThree();
+
+  useFrame(() => {
+    applyCameraZoom(camera, zoom);
+  });
+
+  useEffect(() => {
+    if (!onZoomChange) return;
+    const el = gl.domElement;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const factor = Math.exp(-e.deltaY * ZOOM.WHEEL_SENSITIVITY);
+      const next = THREE.MathUtils.clamp(zoom * factor, ZOOM.MIN, ZOOM.MAX);
+      onZoomChange(next);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [gl, zoom, onZoomChange]);
+
+  return null;
+}
+
 export function VRMScene(props: VRMSceneProps) {
   const {
     vrmUrl, gazeEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity,
     gazeDesiredRef, gazeCurrentRef, mouthValueRef, avatarOffsetRef,
-    greenScreen = false, backgroundImageUrl = null, lighting,
+    greenScreen = false, backgroundImageUrl = null, lighting, adjust, zoom, onZoomChange,
     onLoaded, onError,
   } = props;
 
   const bgColor = greenScreen ? GREEN_SCREEN.COLOR : SCENE.BACKGROUND;
-  const keyPos = lightPosition(lighting.key.angle, LIGHTING.HEIGHTS.key);
-  const fillPos = lightPosition(lighting.fill.angle, LIGHTING.HEIGHTS.fill);
-  const rimPos = lightPosition(lighting.rim.angle, LIGHTING.HEIGHTS.rim);
-  const backPos = lightPosition(lighting.back.angle, LIGHTING.HEIGHTS.back);
 
   return (
     <Canvas
@@ -88,12 +114,12 @@ export function VRMScene(props: VRMSceneProps) {
         <color attach="background" args={[bgColor]} />
       )}
 
-      <ambientLight intensity={lighting.ambient} color={SCENE.LIGHT_AMBIENT} />
+      <ambientLight intensity={LIGHTING.AMBIENT_INTENSITY} color={SCENE.LIGHT_AMBIENT} />
 
       <directionalLight
-        position={keyPos}
-        intensity={lighting.key.intensity}
-        color={SCENE.LIGHT_KEY}
+        position={LIGHTING.FRONT_POSITION}
+        intensity={lighting.front}
+        color={SCENE.LIGHT_FRONT}
         castShadow
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
@@ -105,20 +131,9 @@ export function VRMScene(props: VRMSceneProps) {
         shadow-camera-bottom={-1.5}
       />
       <directionalLight
-        position={fillPos}
-        intensity={lighting.fill.intensity}
-        color={SCENE.LIGHT_FILL}
-      />
-      <pointLight
-        position={rimPos}
-        intensity={lighting.rim.intensity}
-        color={SCENE.LIGHT_RIM}
-        distance={5}
-      />
-      <directionalLight
-        position={backPos}
-        intensity={lighting.back.intensity}
-        color={SCENE.LIGHT_BACK}
+        position={LIGHTING.TOP_POSITION}
+        intensity={lighting.top}
+        color={SCENE.LIGHT_TOP}
       />
 
       <VRMAvatar
@@ -129,6 +144,10 @@ export function VRMScene(props: VRMSceneProps) {
         mouthValueRef={mouthValueRef} avatarOffsetRef={avatarOffsetRef}
         onLoaded={onLoaded} onError={onError}
       />
+
+      <PostFX brightness={adjust.brightness} saturation={adjust.saturation} contrast={adjust.contrast} />
+
+      <CameraRig zoom={zoom} onZoomChange={onZoomChange} />
     </Canvas>
   );
 }
