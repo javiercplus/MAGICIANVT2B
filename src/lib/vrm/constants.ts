@@ -49,6 +49,10 @@ export const LIPSYNC = {
   DB_MIN: -40,
   DB_MAX: -20,
   VOLUME_FACTOR_CLAMP_MIN: 0.3,
+  // Smoothing rates (per second). Attack opens the mouth quickly when sound
+  // arrives; release lets it close slowly/smoothly over a few seconds.
+  ATTACK_SPEED: 14.0,
+  RELEASE_SPEED: 1.2,
   VOWEL_PRESETS: ['aa', 'ee', 'ih', 'oh', 'ou'] as const,
   MOUTH_OPEN_PRESET: 'aa',
 } as const;
