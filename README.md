@@ -4,7 +4,8 @@
 
 It allows you to load `.vrm` models, manipulate lighting, and use your microphone and mouse to bring your avatar to life directly in your browser.
 
-<img width="1279" height="574" alt="image" src="https://github.com/user-attachments/assets/e4f6b525-b8fb-4d01-b2ef-83657e47ffff" />
+<img width="1264" height="679" alt="image" src="https://github.com/user-attachments/assets/a3d19423-cf3d-410f-ad3e-d3f3e26e4fab" />
+
 
 
 ## Features
