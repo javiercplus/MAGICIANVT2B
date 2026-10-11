@@ -157,7 +157,7 @@ export function ControlPanel(props: ControlPanelProps) {
 
   return (
     <Card className={cn(
-      'w-[300px] max-w-[calc(100vw-2rem)] bg-zinc-900/85 border-zinc-800',
+      'w-[360px] max-w-[calc(100vw-2rem)] bg-zinc-900/85 border-zinc-800',
       'backdrop-blur-md shadow-2xl shadow-black/40 text-zinc-100'
     )}>
       <CardHeader className="pb-2">
