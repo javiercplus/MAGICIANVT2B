@@ -91,17 +91,25 @@ export function randomNextBlinkDelay(): number {
 // Relaxed stand pose: arms down at sides with slight elbow bend.
 // VRM 1.0 loads in T-pose; we rotate upper+lower arm bones.
 // Pose persists through vrm.update() since normalized bone quats stay set.
+//
+// VRM 0.x models face -Z in their local (normalized) frame, so their arms are
+// mirrored across X relative to VRM 1.0 (right arm extends +X instead of -X).
+// Rotations about X and Z must therefore be negated for VRM 0.x, otherwise the
+// arms rotate upward instead of down.
 export function applyStandPose(vrm: VRM): void {
   const humanoid = vrm.humanoid;
   if (!humanoid) return;
 
+  const isVRM0 = (vrm as any).meta?.metaVersion === '0';
+  const mirror = isVRM0 ? -1 : 1;
+
   const upperArms = [
-    { name: 'rightUpperArm' as const, z: STAND_POSE.RIGHT_ARM_Z_RAD },
-    { name: 'leftUpperArm' as const, z: STAND_POSE.LEFT_ARM_Z_RAD },
+    { name: 'rightUpperArm' as const, z: mirror * STAND_POSE.RIGHT_ARM_Z_RAD },
+    { name: 'leftUpperArm' as const, z: mirror * STAND_POSE.LEFT_ARM_Z_RAD },
   ];
   const lowerArms = [
-    { name: 'rightLowerArm' as const, x: STAND_POSE.RIGHT_LOWER_ARM_X_RAD, z: STAND_POSE.RIGHT_LOWER_ARM_Z_RAD },
-    { name: 'leftLowerArm' as const, x: STAND_POSE.LEFT_LOWER_ARM_X_RAD, z: STAND_POSE.LEFT_LOWER_ARM_Z_RAD },
+    { name: 'rightLowerArm' as const, x: mirror * STAND_POSE.RIGHT_LOWER_ARM_X_RAD, z: mirror * STAND_POSE.RIGHT_LOWER_ARM_Z_RAD },
+    { name: 'leftLowerArm' as const, x: mirror * STAND_POSE.LEFT_LOWER_ARM_X_RAD, z: mirror * STAND_POSE.LEFT_LOWER_ARM_Z_RAD },
   ];
 
   for (const { name, z } of upperArms) {
