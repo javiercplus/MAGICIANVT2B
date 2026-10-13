@@ -4,6 +4,7 @@ import {
   MousePointerClick, Mic, Eye, Upload, RotateCcw, AlertCircle,
   Loader2, CircleCheck, Square, Circle, Palette, Crosshair,
   Image as ImageIcon, Sun, Save, Activity, Dna, SlidersHorizontal, ZoomIn,
+  Sparkles, Wand2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,7 +17,18 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
-import { ZOOM, type LightingConfig, type AdjustConfig } from '@/lib/vrm/constants';
+import { ZOOM, type LightingConfig, type AdjustConfig, type ShaderConfig, type ShaderPreset } from '@/lib/vrm/constants';
+
+const SHADER_PRESETS: { value: ShaderPreset; label: string }[] = [
+  { value: 'off', label: 'Off' },
+  { value: 'hologram', label: 'Hologram' },
+  { value: 'dissolve', label: 'Dissolve' },
+  { value: 'glow', label: 'Glow' },
+  { value: 'scanline', label: 'Scanline' },
+  { value: 'outline', label: 'Outline' },
+  { value: 'chromatic', label: 'Chromatic' },
+  { value: 'pixel', label: 'Pixel' },
+];
 
 interface ControlPanelProps {
   vrmName: string;
@@ -31,6 +43,7 @@ interface ControlPanelProps {
   idleSwayEnabled: boolean;
   idleSwayIntensity: number;
   greenScreen: boolean;
+  chromaColor: string;
   hasBackground: boolean;
   micLevel: number;
   micReady: boolean;
@@ -39,6 +52,7 @@ interface ControlPanelProps {
   recordingSec: number;
   lighting: LightingConfig;
   adjust: AdjustConfig;
+  shader: ShaderConfig;
   zoom: number;
   onGazeToggle: (v: boolean) => void;
   onCaptureOutsideToggle: (v: boolean) => void;
@@ -49,8 +63,10 @@ interface ControlPanelProps {
   onIdleSwayToggle: (v: boolean) => void;
   onIdleSwayIntensityChange: (v: number) => void;
   onGreenScreenToggle: (v: boolean) => void;
+  onChromaColorChange: (c: string) => void;
   onLightingChange: (l: LightingConfig) => void;
   onAdjustChange: (a: AdjustConfig) => void;
+  onShaderChange: (s: ShaderConfig) => void;
   onZoomChange: (z: number) => void;
   onPickFile: () => void;
   onResetVRM: () => void;
@@ -146,18 +162,18 @@ function LightSlider({ label, value, min, max, step, unit, decimals = 2, onChang
 export function ControlPanel(props: ControlPanelProps) {
   const {
     vrmName, vrmStatus, vrmError,
-    gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, hasBackground,
+    gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, chromaColor, hasBackground,
     micLevel, micReady, micError,
     isRecording, recordingSec,
-    lighting, adjust, zoom,
-    onGazeToggle, onCaptureOutsideToggle, onMicToggle, onAutoBlinkToggle, onRandomEyesToggle, onRandomEyesIntensityChange, onIdleSwayToggle, onIdleSwayIntensityChange, onGreenScreenToggle,
-    onLightingChange, onAdjustChange, onZoomChange,
+    lighting, adjust, shader, zoom,
+    onGazeToggle, onCaptureOutsideToggle, onMicToggle, onAutoBlinkToggle, onRandomEyesToggle, onRandomEyesIntensityChange, onIdleSwayToggle, onIdleSwayIntensityChange, onGreenScreenToggle, onChromaColorChange,
+    onLightingChange, onAdjustChange, onShaderChange, onZoomChange,
     onPickFile, onResetVRM, onPickBackground, onClearBackground, onRecordToggle, onSaveConfig,
   } = props;
 
   return (
     <Card className={cn(
-      'w-[360px] max-w-[calc(100vw-2rem)] bg-zinc-900/85 border-zinc-800',
+      'w-[440px] max-w-[calc(100vw-2rem)] bg-zinc-900/85 border-zinc-800',
       'backdrop-blur-md shadow-2xl shadow-black/40 text-zinc-100'
     )}>
       <CardHeader className="pb-2">
@@ -170,12 +186,13 @@ export function ControlPanel(props: ControlPanelProps) {
 
       <CardContent className="p-3 pt-0">
         <Tabs defaultValue="avatar" className="w-full">
-          <TabsList className="grid w-full grid-cols-5 bg-zinc-800/60 h-8">
+          <TabsList className="grid w-full grid-cols-6 bg-zinc-800/60 h-8">
             <TabsTrigger value="avatar" className="text-[10px] uppercase tracking-wider">Avatar</TabsTrigger>
             <TabsTrigger value="motion" className="text-[10px] uppercase tracking-wider">Motion</TabsTrigger>
             <TabsTrigger value="scene" className="text-[10px] uppercase tracking-wider">Scene</TabsTrigger>
             <TabsTrigger value="lighting" className="text-[10px] uppercase tracking-wider">Light</TabsTrigger>
             <TabsTrigger value="adjust" className="text-[10px] uppercase tracking-wider">Adjust</TabsTrigger>
+            <TabsTrigger value="shaders" className="text-[10px] uppercase tracking-wider">Shaders</TabsTrigger>
           </TabsList>
 
           <TabsContent value="avatar" className="mt-3 space-y-3">
@@ -287,8 +304,20 @@ export function ControlPanel(props: ControlPanelProps) {
           <TabsContent value="scene" className="mt-3 space-y-2">
             <div className="space-y-1">
               <ToggleRow icon={<Palette className="w-4 h-4" />}
-                label="Green Screen" description="Chroma-key background for OBS."
+                label="Chroma Screen" description="Solid key background for OBS. Pick any color."
                 checked={greenScreen} onCheckedChange={onGreenScreenToggle} accentClass="bg-emerald-500/20 text-emerald-300" />
+              {greenScreen && (
+                <div className="ml-11 mr-2 p-2 rounded-md bg-zinc-900/40 border border-zinc-800/60 flex items-center justify-between">
+                  <span className="text-[11px] text-zinc-400">Key color</span>
+                  <input
+                    type="color"
+                    value={chromaColor}
+                    onChange={(e) => onChromaColorChange(e.target.value)}
+                    className="h-6 w-10 rounded border border-zinc-700 bg-transparent cursor-pointer"
+                    aria-label="Chroma key color"
+                  />
+                </div>
+              )}
               <ToggleRow icon={<ImageIcon className="w-4 h-4" />}
                 label="Custom Background" description="Import image as background."
                 checked={hasBackground} onCheckedChange={(v) => v ? onPickBackground() : onClearBackground()}
@@ -393,6 +422,115 @@ export function ControlPanel(props: ControlPanelProps) {
             <p className="text-[10px] text-zinc-500 leading-snug pt-1">
               Color adjustments apply to the rendered avatar and are included in recordings.
             </p>
+          </TabsContent>
+
+          <TabsContent value="shaders" className="mt-3 space-y-3">
+            <ScrollArea className="max-h-[400px]">
+              <div className="space-y-3 pr-1">
+                <div className="space-y-1.5">
+                  <span className="text-[10px] uppercase tracking-wider text-zinc-500">Preset</span>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {SHADER_PRESETS.map((p) => (
+                      <button
+                        key={p.value}
+                        type="button"
+                        onClick={() => onShaderChange({
+                          ...shader,
+                          preset: p.value,
+                          intensity: p.value === 'off' ? shader.intensity : Math.max(shader.intensity, 0.05),
+                        })}
+                        className={cn(
+                          'text-[10px] py-1.5 rounded-md border transition-colors',
+                          shader.preset === p.value
+                            ? 'bg-violet-600/30 border-violet-500/50 text-violet-100'
+                            : 'bg-zinc-800/40 border-zinc-700/60 text-zinc-400 hover:bg-zinc-700/50 hover:text-zinc-200',
+                        )}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
+                      <Sparkles className="w-3.5 h-3.5 text-violet-300" />Effect
+                    </div>
+                    <input
+                      type="color"
+                      value={shader.color}
+                      onChange={(e) => onShaderChange({ ...shader, color: e.target.value })}
+                      className="h-6 w-10 rounded border border-zinc-700 bg-transparent cursor-pointer"
+                      aria-label="Effect color"
+                    />
+                  </div>
+                  <LightSlider
+                    label={shader.preset === 'outline' ? 'Outline width' : 'Intensity'}
+                    value={shader.intensity}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    onChange={(v) => onShaderChange({ ...shader, intensity: v })}
+                  />
+                  {(shader.preset === 'hologram' || shader.preset === 'scanline') && (
+                    <LightSlider
+                      label="Scanline density"
+                      value={shader.scanline}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      onChange={(v) => onShaderChange({ ...shader, scanline: v })}
+                    />
+                  )}
+                  {shader.preset === 'dissolve' && (
+                    <LightSlider
+                      label="Dissolve"
+                      value={shader.dissolve}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      onChange={(v) => onShaderChange({ ...shader, dissolve: v })}
+                    />
+                  )}
+                </div>
+
+                <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
+                  <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
+                    <Wand2 className="w-3.5 h-3.5 text-amber-300" />Bloom
+                  </div>
+                  <LightSlider
+                    label="Strength"
+                    value={shader.bloom}
+                    min={0}
+                    max={2}
+                    step={0.05}
+                    onChange={(v) => onShaderChange({ ...shader, bloom: v })}
+                  />
+                  <LightSlider
+                    label="Radius"
+                    value={shader.bloomRadius}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    onChange={(v) => onShaderChange({ ...shader, bloomRadius: v })}
+                  />
+                  <LightSlider
+                    label="Threshold"
+                    value={shader.bloomThreshold}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    onChange={(v) => onShaderChange({ ...shader, bloomThreshold: v })}
+                  />
+                </div>
+
+                <p className="text-[10px] text-zinc-500 leading-snug">
+                  Model presets inject into VRM MToon (bones/morphs intact). Outline uses MToon&apos;s
+                  native outline. Chromatic and Pixel are fullscreen. Bloom glows high-emissive parts.
+                </p>
+              </div>
+            </ScrollArea>
           </TabsContent>
         </Tabs>
       </CardContent>

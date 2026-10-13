@@ -14,7 +14,8 @@ import {
   applyStandPose,
 } from '@/lib/vrm/gazeMath';
 import { GAZE, LIPSYNC, AUTO_BLINK, SCENE } from '@/lib/vrm/constants';
-import type { GazeTarget } from '@/lib/vrm/constants';
+import type { GazeTarget, ShaderConfig } from '@/lib/vrm/constants';
+import { createVRMFXUniforms, applyVRMMaterialFX, updateVRMFX, updateVRMOutline } from '@/lib/vrm/materialFX';
 
 interface VRMAvatarProps {
   vrmUrl: string | null;
@@ -24,6 +25,7 @@ interface VRMAvatarProps {
   randomEyesIntensity: number;
   idleSwayEnabled: boolean;
   idleSwayIntensity: number;
+  shaderConfig: ShaderConfig;
   gazeDesiredRef: React.RefObject<GazeTarget>;
   gazeCurrentRef: React.RefObject<GazeTarget>;
   mouthValueRef: React.RefObject<number>;
@@ -37,11 +39,13 @@ interface VRMAvatarProps {
 export function VRMAvatar(props: VRMAvatarProps) {
   const {
     vrmUrl, gazeEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity,
+    shaderConfig,
     gazeDesiredRef, gazeCurrentRef, mouthValueRef, avatarOffsetRef,
     onLoaded, onError,
   } = props;
 
   const [scene, setScene] = useState<THREE.Group | null>(null);
+  const fxUniforms = useRef(createVRMFXUniforms());
   const vrmRef = useRef<VRM | null>(null);
   const headBoneRef = useRef<THREE.Bone | null>(null);
   const neckBoneRef = useRef<THREE.Bone | null>(null);
@@ -86,6 +90,7 @@ export function VRMAvatar(props: VRMAvatarProps) {
         hipsBoneRef.current = vrm.humanoid?.getNormalizedBoneNode('hips') ?? null;
         spineBoneRef.current = vrm.humanoid?.getNormalizedBoneNode('spine') ?? null;
         applyStandPose(vrm);
+        applyVRMMaterialFX(vrm, fxUniforms.current);
 
         vrmScene.updateMatrixWorld(true);
         const head = headBoneRef.current;
@@ -117,7 +122,7 @@ export function VRMAvatar(props: VRMAvatarProps) {
     };
   }, [vrmUrl]);
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     const vrm = vrmRef.current;
     if (!vrm) return;
     const dt = Math.min(delta, 1 / 30);
@@ -207,6 +212,8 @@ export function VRMAvatar(props: VRMAvatarProps) {
     }
 
     vrm.update(dt);
+    updateVRMFX(fxUniforms.current, shaderConfig, state.clock.elapsedTime);
+    updateVRMOutline(vrm, shaderConfig);
   });
 
   return scene ? <primitive object={scene} /> : null;
