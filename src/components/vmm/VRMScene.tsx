@@ -5,7 +5,7 @@ import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { VRMAvatar } from './VRMAvatar';
 import { PostFX } from './PostFX';
-import { SCENE, ZOOM, GREEN_SCREEN, LIGHTING, type LightingConfig, type AdjustConfig } from '@/lib/vrm/constants';
+import { SCENE, ZOOM, GREEN_SCREEN, LIGHTING, type LightingConfig, type AdjustConfig, type ShaderConfig } from '@/lib/vrm/constants';
 import type { GazeTarget } from '@/lib/vrm/constants';
 import type { LoadVRMResult } from '@/lib/vrm/loadVRM';
 
@@ -22,9 +22,11 @@ interface VRMSceneProps {
   mouthValueRef: React.RefObject<number>;
   avatarOffsetRef: React.RefObject<THREE.Vector3>;
   greenScreen?: boolean;
+  chromaColor?: string;
   backgroundImageUrl?: string | null;
   lighting: LightingConfig;
   adjust: AdjustConfig;
+  shader: ShaderConfig;
   zoom: number;
   onZoomChange?: (z: number) => void;
   onLoaded?: (result: LoadVRMResult) => void;
@@ -88,11 +90,11 @@ export function VRMScene(props: VRMSceneProps) {
   const {
     vrmUrl, gazeEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity,
     gazeDesiredRef, gazeCurrentRef, mouthValueRef, avatarOffsetRef,
-    greenScreen = false, backgroundImageUrl = null, lighting, adjust, zoom, onZoomChange,
+    greenScreen = false, chromaColor = GREEN_SCREEN.COLOR, backgroundImageUrl = null, lighting, adjust, shader, zoom, onZoomChange,
     onLoaded, onError,
   } = props;
 
-  const bgColor = greenScreen ? GREEN_SCREEN.COLOR : SCENE.BACKGROUND;
+  const bgColor = greenScreen ? chromaColor : SCENE.BACKGROUND;
 
   return (
     <Canvas
@@ -140,12 +142,17 @@ export function VRMScene(props: VRMSceneProps) {
         vrmUrl={vrmUrl} gazeEnabled={gazeEnabled} autoBlinkEnabled={autoBlinkEnabled}
         randomEyesEnabled={randomEyesEnabled} randomEyesIntensity={randomEyesIntensity}
         idleSwayEnabled={idleSwayEnabled} idleSwayIntensity={idleSwayIntensity}
+        shaderConfig={shader}
         gazeDesiredRef={gazeDesiredRef} gazeCurrentRef={gazeCurrentRef}
         mouthValueRef={mouthValueRef} avatarOffsetRef={avatarOffsetRef}
         onLoaded={onLoaded} onError={onError}
       />
 
-      <PostFX brightness={adjust.brightness} saturation={adjust.saturation} contrast={adjust.contrast} />
+      <PostFX
+        brightness={adjust.brightness} saturation={adjust.saturation} contrast={adjust.contrast}
+        bloomStrength={shader.bloom} bloomRadius={shader.bloomRadius} bloomThreshold={shader.bloomThreshold}
+        shader={shader}
+      />
 
       <CameraRig zoom={zoom} onZoomChange={onZoomChange} />
     </Canvas>

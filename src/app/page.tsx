@@ -16,7 +16,7 @@ import { useLipSync } from '@/hooks/useLipSync';
 import { useScreenRecording } from '@/hooks/useScreenRecording';
 import { useAvatarDrag } from '@/hooks/useAvatarDrag';
 import { cn } from '@/lib/utils';
-import { DEFAULT_LIGHTING, DEFAULT_ADJUST, ZOOM, type LightingConfig, type AdjustConfig } from '@/lib/vrm/constants';
+import { DEFAULT_LIGHTING, DEFAULT_ADJUST, DEFAULT_SHADER, GREEN_SCREEN, ZOOM, type LightingConfig, type AdjustConfig, type ShaderConfig } from '@/lib/vrm/constants';
 import type { LoadVRMResult } from '@/lib/vrm/loadVRM';
 import { saveVrmToIndexedDB, loadVrmFromIndexedDB, saveConfig, loadConfig } from '@/lib/storage';
 
@@ -42,9 +42,11 @@ export default function Page() {
   const [idleSwayEnabled, setIdleSwayEnabled] = useState(true);
   const [idleSwayIntensity, setIdleSwayIntensity] = useState(0.02);
   const [greenScreen, setGreenScreen] = useState(false);
+  const [chromaColor, setChromaColor] = useState<string>(GREEN_SCREEN.COLOR);
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
   const [lighting, setLighting] = useState<LightingConfig>(DEFAULT_LIGHTING);
   const [adjust, setAdjust] = useState<AdjustConfig>(DEFAULT_ADJUST);
+  const [shader, setShader] = useState<ShaderConfig>(DEFAULT_SHADER);
   const [zoom, setZoom] = useState<number>(ZOOM.DEFAULT);
 
   const [isDragging, setIsDragging] = useState(false);
@@ -86,6 +88,7 @@ export default function Page() {
       if (config.idleSwayEnabled !== undefined) setIdleSwayEnabled(config.idleSwayEnabled);
       if (config.idleSwayIntensity !== undefined) setIdleSwayIntensity(config.idleSwayIntensity);
       if (config.greenScreen !== undefined) setGreenScreen(config.greenScreen);
+      if (typeof config.chromaColor === 'string') setChromaColor(config.chromaColor);
       if (config.lighting !== undefined) {
         const l = config.lighting;
         if (typeof l?.front === 'number' && typeof l?.top === 'number') {
@@ -96,6 +99,12 @@ export default function Page() {
         const a = config.adjust;
         if (typeof a?.brightness === 'number' && typeof a?.saturation === 'number' && typeof a?.contrast === 'number') {
           setAdjust({ brightness: a.brightness, saturation: a.saturation, contrast: a.contrast });
+        }
+      }
+      if (config.shader !== undefined) {
+        const s = config.shader;
+        if (s && typeof s === 'object') {
+          setShader({ ...DEFAULT_SHADER, ...s });
         }
       }
       if (typeof config.zoom === 'number') {
@@ -224,7 +233,7 @@ export default function Page() {
 
   const handleSaveConfig = useCallback(async () => {
     saveConfig({
-      gazeEnabled, captureOutside, globalTracking, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, lighting, adjust, zoom
+      gazeEnabled, captureOutside, globalTracking, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, chromaColor, lighting, adjust, shader, zoom
     });
     if (vrmUrl && vrmUrl !== DEFAULT_VRM_URL) {
       try {
@@ -235,7 +244,7 @@ export default function Page() {
         console.error('Failed to save VRM blob', e);
       }
     }
-  }, [gazeEnabled, captureOutside, globalTracking, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, lighting, adjust, zoom, vrmUrl, vrmName]);
+  }, [gazeEnabled, captureOutside, globalTracking, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, chromaColor, lighting, adjust, shader, zoom, vrmUrl, vrmName]);
 
   const displayVrmName = meta?.name || vrmName;
   const headerStatus = vrmStatus === 'loaded'
@@ -257,9 +266,10 @@ export default function Page() {
             idleSwayEnabled={idleSwayEnabled} idleSwayIntensity={idleSwayIntensity}
             gazeDesiredRef={desiredRef} gazeCurrentRef={currentRef}
             mouthValueRef={mouthValueRef} avatarOffsetRef={avatarOffsetRef}
-            greenScreen={greenScreen} backgroundImageUrl={backgroundImageUrl}
+            greenScreen={greenScreen} chromaColor={chromaColor} backgroundImageUrl={backgroundImageUrl}
             lighting={lighting}
             adjust={adjust}
+            shader={shader}
             zoom={zoom}
             onZoomChange={setZoom}
             onLoaded={handleLoaded} onError={handleError}
@@ -308,11 +318,12 @@ export default function Page() {
             micEnabled={micEnabled} autoBlinkEnabled={autoBlinkEnabled}
             randomEyesEnabled={randomEyesEnabled} randomEyesIntensity={randomEyesIntensity}
             idleSwayEnabled={idleSwayEnabled} idleSwayIntensity={idleSwayIntensity}
-            greenScreen={greenScreen} hasBackground={!!backgroundImageUrl}
+            greenScreen={greenScreen} chromaColor={chromaColor} hasBackground={!!backgroundImageUrl}
             micLevel={level} micReady={micReady} micError={micError}
             isRecording={isRecording} recordingSec={recordingSec}
             lighting={lighting}
             adjust={adjust}
+            shader={shader}
             zoom={zoom}
             onGazeToggle={setGazeEnabled} onCaptureOutsideToggle={setCaptureOutside}
             onGlobalTrackingToggle={handleGlobalTrackingToggle}
@@ -320,8 +331,10 @@ export default function Page() {
             onRandomEyesToggle={setRandomEyesEnabled} onRandomEyesIntensityChange={setRandomEyesIntensity}
             onIdleSwayToggle={setIdleSwayEnabled} onIdleSwayIntensityChange={setIdleSwayIntensity}
             onGreenScreenToggle={setGreenScreen}
+            onChromaColorChange={setChromaColor}
             onLightingChange={setLighting}
             onAdjustChange={setAdjust}
+            onShaderChange={setShader}
             onZoomChange={setZoom}
             onPickFile={handlePickFile} onResetVRM={handleResetVRM}
             onPickBackground={handlePickBackground} onClearBackground={handleClearBackground}

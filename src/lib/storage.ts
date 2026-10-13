@@ -9,8 +9,10 @@ export interface SavedConfig {
   idleSwayEnabled?: boolean;
   idleSwayIntensity?: number;
   greenScreen?: boolean;
+  chromaColor?: string;
   lighting?: any; // LightingConfig
   adjust?: any; // AdjustConfig
+  shader?: any; // ShaderConfig
   zoom?: number;
 }
 

@@ -118,3 +118,31 @@ export type GazeTarget = {
   x: number;
   y: number;
 };
+
+// Custom MToon shader effects. Injected via onBeforeCompile so VRM features
+// (bones, morphs, outlines) stay intact. See src/lib/vrm/materialFX.ts.
+export type ShaderPreset =
+  | 'off' | 'hologram' | 'dissolve' | 'glow' | 'scanline'
+  | 'outline' | 'chromatic' | 'pixel';
+
+export interface ShaderConfig {
+  preset: ShaderPreset;
+  intensity: number;   // 0..1 master mix
+  color: string;       // tint / glow color (hex)
+  dissolve: number;    // 0..1 (dissolve preset)
+  scanline: number;    // 0..1 scanline density
+  bloom: number;       // UnrealBloom strength, 0 = off
+  bloomRadius: number; // 0..1
+  bloomThreshold: number; // 0..1
+}
+
+export const DEFAULT_SHADER: ShaderConfig = {
+  preset: 'off',
+  intensity: 0.5,
+  color: '#38f0ff',
+  dissolve: 0,
+  scanline: 0.35,
+  bloom: 0.6,
+  bloomRadius: 0.4,
+  bloomThreshold: 0.85,
+};
