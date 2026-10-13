@@ -16,11 +16,12 @@ export interface LoadVRMResult {
 }
 
 // Per-instance setup mirroring VMagicMirror's VRMLoadController:
-// - rotateVRM0: VRM 0.x faces +Z after 180° rotation (no-op for VRM 1.0)
+// - rotateVRM0: VRM 0.x faces +Z after 180° rotation (no-op for VRM 1.0).
+//   It reads vrm.meta.metaVersion, so it must receive the VRM (not vrm.scene).
 // - removeUnnecessaryVertices + combineSkeletons: geometry optimization
 // - frustumCulled=false: prevents SkinnedMesh pop-in/out
 function applyVRMSetup(vrm: VRM): void {
-  VRMUtils.rotateVRM0(vrm.scene);
+  VRMUtils.rotateVRM0(vrm);
   VRMUtils.removeUnnecessaryVertices(vrm.scene);
   VRMUtils.combineSkeletons(vrm.scene);
 
@@ -43,10 +44,11 @@ function extractResult(gltf: any): LoadVRMResult {
   try {
     const m = (vrm as any).meta;
     if (m) {
-      meta.name = m.name ?? undefined;
+      // VRM 1.0 uses `name`; VRM 0.x uses `title`.
+      meta.name = m.name ?? m.title ?? undefined;
       meta.authors = m.authors ?? (m.author ? [m.author] : undefined);
       meta.copyright = m.copyrightInformation ?? undefined;
-      meta.version = m.version ?? undefined;
+      meta.version = m.version ?? m.exporterVersion ?? undefined;
     }
   } catch {}
 
