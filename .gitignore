@@ -52,7 +52,7 @@ prompt
 server.log
 # Skills directory
 /skills/
-
+/dist-vulkan
 # Heavy archives and generated binaries
 *.tar
 *.tar.gz
