@@ -13,7 +13,8 @@
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
     "dev:electron": "concurrently \"npm run dev\" \"wait-on http://localhost:4000 && electron .\"",
-    "build:electron": "npm run build && electron-builder"
+    "build:electron": "npm run build && electron-builder",
+    "build:electron:vulkan": "npm run build && electron-builder -c.extraMetadata.magicianGpu=vulkan -c.directories.output=dist-vulkan -c.productName=MagicianVT2B-Vulkan"
   },
   "build": {
     "appId": "com.magicianvt2b.app",

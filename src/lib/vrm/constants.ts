@@ -141,7 +141,7 @@ export interface OptimizationConfig {
 }
 
 export const DEFAULT_OPTIMIZATION: OptimizationConfig = {
-  fpsLimit: 30,
+  fpsLimit: 60,
   renderScale: 1,
   antiAlias: false,
   pixelRatio: 1,

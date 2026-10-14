@@ -38,12 +38,56 @@ function relaunchOnWaylandForX11() {
 
 const relaunchedOnX11 = relaunchOnWaylandForX11();
 
+// Which GPU backend this build should use. "opengl" (default) or "vulkan".
+// Priority: MAGICIAN_GPU env var (dev / manual) > package.json `magicianGpu`
+// field (baked in at package time via electron-builder extraMetadata).
+function resolveGpuBackend() {
+  const env = (process.env.MAGICIAN_GPU || '').toLowerCase();
+  if (env === 'vulkan' || env === 'opengl') return env;
+  try {
+    const field = require('./package.json').magicianGpu;
+    if (typeof field === 'string' && field.toLowerCase() === 'vulkan') return 'vulkan';
+  } catch {}
+  return 'opengl';
+}
+
+const GPU_BACKEND = resolveGpuBackend();
+
 // Serve the statically exported Next.js build over a custom protocol.
 // Using file:// directly breaks the UI because Next emits absolute asset
 // paths (/_next/..., /models/..., /logo.svg) that would resolve to the
 // filesystem root instead of the `out/` directory.
 if (!relaunchedOnX11) {
   ({ app, BrowserWindow, session, protocol, net, ipcMain, screen } = require('electron'));
+
+  // Chromium switches. MUST run before app.whenReady() (and before any
+  // BrowserWindow is created) so Chromium picks them up at startup.
+  //  - CalculateNativeWinOcclusion: on Windows Chromium throttles/pauses the
+  //    renderer when the window is fully occluded; VTuber captures keep the
+  //    window "hidden" behind OBS, so disable it to keep rendering.
+  //  - disable-gpu-vsync: uncouples rAF from the display refresh. The app caps
+  //    its own FPS in the Three.js loop, so we don't need the driver's vsync.
+  //  - enable-accelerated-video-decode: hardware video decode (webcam/overlays).
+  app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+  app.commandLine.appendSwitch('disable-gpu-vsync');
+  app.commandLine.appendSwitch('enable-accelerated-video-decode');
+
+  // NOTE: appendSwitch replaces any previous value for the same switch, so all
+  // V8 flags must be passed in a single 'js-flags' call (joined by spaces).
+  //  - --max-old-space-size=512: cap the heap so long sessions don't balloon.
+  //  - --expose-gc: exposes global.gc() for manual collection (e.g. after
+  //    unloading a VRM) to release textures/geometries promptly.
+  app.commandLine.appendSwitch('js-flags', '--max-old-space-size=512 --expose-gc');
+
+  // GPU backend. When this build targets "vulkan" (see resolveGpuBackend),
+  // route Chromium/ANGLE through Vulkan instead of the default OpenGL backend.
+  // This is what makes the separate Vulkan AppImage behave differently from
+  // the OpenGL one without needing runtime flags from the user.
+  if (GPU_BACKEND === 'vulkan') {
+    app.commandLine.appendSwitch('enable-features', 'Vulkan');
+    app.commandLine.appendSwitch('use-angle', 'vulkan');
+    app.commandLine.appendSwitch('enable-unsafe-webgpu');
+  }
 
   protocol.registerSchemesAsPrivileged([
     {
