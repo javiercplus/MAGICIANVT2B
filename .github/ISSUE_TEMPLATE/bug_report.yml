@@ -1,0 +1,125 @@
+name: Bug report
+description: Report a problem with MagicianVT2B (crash, bug, visual glitch, performance).
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve MagicianVT2B!
+        Please fill in as much as you can — clear reports get fixed much faster.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong, in one or two sentences.
+      placeholder: The avatar disappears after loading a VRM with...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact steps so we can reproduce it.
+      placeholder: |
+        1. Open the app
+        2. Load model X
+        3. Enable ...
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: The avatar should render normally.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      placeholder: The avatar stays invisible / app freezes / FPS drops to 5.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: App version / commit
+      description: Version from the title bar, the AppImage name, or the git commit.
+      placeholder: "0.3.0 / AppImage MagicianVT2B-0.3.0 / commit abc1234"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - Linux (X11)
+        - Linux (Wayland)
+        - macOS
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: gpu-backend
+    attributes:
+      label: GPU backend
+      description: Which build are you running?
+      options:
+        - OpenGL (default AppImage)
+        - Vulkan (Vulkan AppImage)
+        - Not sure
+    validations:
+      required: false
+
+  - type: input
+    id: model
+    attributes:
+      label: VRM model
+      description: Name of the model and where it came from (if you can share it).
+      placeholder: "VRM1 Constraint Twist Sample (bundled) / my-avatar.vrm"
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots / screen recording
+      description: Drag & drop images or short videos here. A capture of the bug helps a lot.
+      placeholder: Click here, then paste or drag & drop your files.
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / console output
+      description: |
+        Paste any errors here, and drag & drop your full log file if you have one.
+        How to get logs:
+        - Renderer console: open DevTools (Ctrl+Shift+I) → Console tab.
+        - Electron main process: run the app from a terminal and copy the output.
+      render: shell
+      placeholder: |
+        Paste error messages / stack traces here...
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: I removed any personal or sensitive data from the screenshots and logs.
+          required: true
