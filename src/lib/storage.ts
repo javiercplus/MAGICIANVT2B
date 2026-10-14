@@ -13,6 +13,7 @@ export interface SavedConfig {
   lighting?: any; // LightingConfig
   adjust?: any; // AdjustConfig
   shader?: any; // ShaderConfig
+  optimization?: any; // OptimizationConfig
   zoom?: number;
 }
 

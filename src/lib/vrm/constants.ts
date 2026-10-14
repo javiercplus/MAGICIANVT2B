@@ -119,6 +119,44 @@ export type GazeTarget = {
   y: number;
 };
 
+// === Optimization Panel =====================================================
+
+export type PhysicsQuality = 'low' | 'medium' | 'high';
+
+// Spring-bone solver update interval in seconds. 0 = every frame (full quality).
+export const PHYSICS_INTERVAL: Record<PhysicsQuality, number> = {
+  low: 0.1,    // 10 Hz
+  medium: 0.05, // 20 Hz
+  high: 0,      // every frame
+};
+
+export interface OptimizationConfig {
+  fpsLimit: number;        // 15..60 (render loop cap)
+  renderScale: number;     // 0.25..1 internal render-target resolution
+  antiAlias: boolean;      // FXAA post-process (compensates low renderScale)
+  pixelRatio: number;      // 0.5..1.5 renderer.setPixelRatio
+  physicsQuality: PhysicsQuality;
+  morphOptimization: boolean;
+  mtoonLowPower: boolean;
+}
+
+export const DEFAULT_OPTIMIZATION: OptimizationConfig = {
+  fpsLimit: 30,
+  renderScale: 1,
+  antiAlias: false,
+  pixelRatio: 1,
+  physicsQuality: 'high',
+  morphOptimization: false,
+  mtoonLowPower: false,
+};
+
+export interface Telemetry {
+  fps: number;
+  textures: number;
+  calls: number;
+  geometries: number;
+}
+
 // Custom MToon shader effects. Injected via onBeforeCompile so VRM features
 // (bones, morphs, outlines) stay intact. See src/lib/vrm/materialFX.ts.
 export type ShaderPreset =

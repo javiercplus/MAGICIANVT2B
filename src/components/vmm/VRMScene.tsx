@@ -5,7 +5,8 @@ import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { VRMAvatar } from './VRMAvatar';
 import { PostFX } from './PostFX';
-import { SCENE, ZOOM, GREEN_SCREEN, LIGHTING, type LightingConfig, type AdjustConfig, type ShaderConfig } from '@/lib/vrm/constants';
+import { RenderSettings, TelemetryProbe } from './TelemetryProbe';
+import { SCENE, ZOOM, GREEN_SCREEN, LIGHTING, type LightingConfig, type AdjustConfig, type ShaderConfig, type OptimizationConfig, type Telemetry } from '@/lib/vrm/constants';
 import type { GazeTarget } from '@/lib/vrm/constants';
 import type { LoadVRMResult } from '@/lib/vrm/loadVRM';
 
@@ -27,8 +28,10 @@ interface VRMSceneProps {
   lighting: LightingConfig;
   adjust: AdjustConfig;
   shader: ShaderConfig;
+  optimization: OptimizationConfig;
   zoom: number;
   onZoomChange?: (z: number) => void;
+  onTelemetry?: (t: Telemetry) => void;
   onLoaded?: (result: LoadVRMResult) => void;
   onError?: (err: Error) => void;
 }
@@ -90,8 +93,8 @@ export function VRMScene(props: VRMSceneProps) {
   const {
     vrmUrl, gazeEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity,
     gazeDesiredRef, gazeCurrentRef, mouthValueRef, avatarOffsetRef,
-    greenScreen = false, chromaColor = GREEN_SCREEN.COLOR, backgroundImageUrl = null, lighting, adjust, shader, zoom, onZoomChange,
-    onLoaded, onError,
+    greenScreen = false, chromaColor = GREEN_SCREEN.COLOR, backgroundImageUrl = null, lighting, adjust, shader, optimization, zoom, onZoomChange,
+    onTelemetry, onLoaded, onError,
   } = props;
 
   const bgColor = greenScreen ? chromaColor : SCENE.BACKGROUND;
@@ -142,7 +145,7 @@ export function VRMScene(props: VRMSceneProps) {
         vrmUrl={vrmUrl} gazeEnabled={gazeEnabled} autoBlinkEnabled={autoBlinkEnabled}
         randomEyesEnabled={randomEyesEnabled} randomEyesIntensity={randomEyesIntensity}
         idleSwayEnabled={idleSwayEnabled} idleSwayIntensity={idleSwayIntensity}
-        shaderConfig={shader}
+        shaderConfig={shader} optimization={optimization}
         gazeDesiredRef={gazeDesiredRef} gazeCurrentRef={gazeCurrentRef}
         mouthValueRef={mouthValueRef} avatarOffsetRef={avatarOffsetRef}
         onLoaded={onLoaded} onError={onError}
@@ -152,7 +155,14 @@ export function VRMScene(props: VRMSceneProps) {
         brightness={adjust.brightness} saturation={adjust.saturation} contrast={adjust.contrast}
         bloomStrength={shader.bloom} bloomRadius={shader.bloomRadius} bloomThreshold={shader.bloomThreshold}
         shader={shader}
+        fpsLimit={optimization.fpsLimit}
+        renderScale={optimization.renderScale}
+        pixelRatio={optimization.pixelRatio}
+        antiAlias={optimization.antiAlias}
       />
+
+      <RenderSettings pixelRatio={optimization.pixelRatio} />
+      <TelemetryProbe intervalMs={500} onSample={onTelemetry ?? (() => {})} />
 
       <CameraRig zoom={zoom} onZoomChange={onZoomChange} />
     </Canvas>

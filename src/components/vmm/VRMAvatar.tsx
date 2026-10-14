@@ -13,9 +13,10 @@ import {
   randomNextBlinkDelay,
   applyStandPose,
 } from '@/lib/vrm/gazeMath';
-import { GAZE, LIPSYNC, AUTO_BLINK, SCENE } from '@/lib/vrm/constants';
-import type { GazeTarget, ShaderConfig } from '@/lib/vrm/constants';
+import { GAZE, LIPSYNC, AUTO_BLINK, SCENE, PHYSICS_INTERVAL } from '@/lib/vrm/constants';
+import type { GazeTarget, ShaderConfig, OptimizationConfig } from '@/lib/vrm/constants';
 import { createVRMFXUniforms, applyVRMMaterialFX, updateVRMFX, updateVRMOutline } from '@/lib/vrm/materialFX';
+import { applyLowPowerMaterials, updateVRMSelective } from '@/lib/vrm/optimization';
 
 interface VRMAvatarProps {
   vrmUrl: string | null;
@@ -26,6 +27,7 @@ interface VRMAvatarProps {
   idleSwayEnabled: boolean;
   idleSwayIntensity: number;
   shaderConfig: ShaderConfig;
+  optimization: OptimizationConfig;
   gazeDesiredRef: React.RefObject<GazeTarget>;
   gazeCurrentRef: React.RefObject<GazeTarget>;
   mouthValueRef: React.RefObject<number>;
@@ -37,7 +39,7 @@ interface VRMAvatarProps {
 export function VRMAvatar(props: VRMAvatarProps) {
   const {
     vrmUrl, gazeEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity,
-    shaderConfig,
+    shaderConfig, optimization,
     gazeDesiredRef, gazeCurrentRef, mouthValueRef, avatarOffsetRef,
     onLoaded, onError,
   } = props;
@@ -45,6 +47,9 @@ export function VRMAvatar(props: VRMAvatarProps) {
   const [scene, setScene] = useState<THREE.Group | null>(null);
   const fxUniforms = useRef(createVRMFXUniforms());
   const vrmRef = useRef<VRM | null>(null);
+  const lastMouthRef = useRef(0);
+  const lastBlinkRef = useRef(0);
+  const physicsAccRef = useRef(0);
   const headBoneRef = useRef<THREE.Bone | null>(null);
   const neckBoneRef = useRef<THREE.Bone | null>(null);
   const leftEyeBoneRef = useRef<THREE.Bone | null>(null);
@@ -120,6 +125,13 @@ export function VRMAvatar(props: VRMAvatarProps) {
     };
   }, [vrmUrl]);
 
+  // VRM Boost: swap MToon <-> MeshLambertMaterial live, without reloading.
+  useEffect(() => {
+    const vrm = vrmRef.current;
+    if (!vrm || !scene) return;
+    applyLowPowerMaterials(vrm, optimization.mtoonLowPower);
+  }, [scene, optimization.mtoonLowPower]);
+
   useFrame((state, delta) => {
     const vrm = vrmRef.current;
     if (!vrm) return;
@@ -168,10 +180,12 @@ export function VRMAvatar(props: VRMAvatarProps) {
       rightEye.quaternion.setFromEuler(euler);
     }
 
+    const wantMouth = mouthValueRef.current ?? 0;
     try {
-      vrm.expressionManager?.setValue(LIPSYNC.MOUTH_OPEN_PRESET, mouthValueRef.current ?? 0);
+      vrm.expressionManager?.setValue(LIPSYNC.MOUTH_OPEN_PRESET, wantMouth);
     } catch {}
 
+    let wantBlink = lastBlinkRef.current;
     if (autoBlinkEnabled) {
       const bs = blinkStateRef.current;
       bs.elapsed += dt;
@@ -181,11 +195,20 @@ export function VRMAvatar(props: VRMAvatarProps) {
           bs.elapsed = 0;
           bs.nextDelay = randomNextBlinkDelay();
         }
-        try { vrm.expressionManager?.setValue(AUTO_BLINK.BLINK_PRESET, result.value); } catch {}
+        wantBlink = result.value;
       } else {
-        try { vrm.expressionManager?.setValue(AUTO_BLINK.BLINK_PRESET, 0); } catch {}
+        wantBlink = 0;
       }
+      try { vrm.expressionManager?.setValue(AUTO_BLINK.BLINK_PRESET, wantBlink); } catch {}
     }
+
+    // Blend-shape optimization: expressions are only re-solved (morphTarget
+    // influences rewritten) when the target weights actually move.
+    const expressionsDirty =
+      Math.abs(wantMouth - lastMouthRef.current) > 0.004 ||
+      Math.abs(wantBlink - lastBlinkRef.current) > 0.004;
+    lastMouthRef.current = wantMouth;
+    lastBlinkRef.current = wantBlink;
 
     const hips = hipsBoneRef.current;
     const spine = spineBoneRef.current;
@@ -203,7 +226,28 @@ export function VRMAvatar(props: VRMAvatarProps) {
       }
     }
 
-    vrm.update(dt);
+    // Physics quality: throttle the spring-bone solver. When idle, back off
+    // further. springDelta passes the accumulated time so physics stays stable.
+    const physicsInterval = PHYSICS_INTERVAL[optimization.physicsQuality];
+    let skipSpringBones = false;
+    let springDelta: number | undefined;
+    if (physicsInterval > 0) {
+      physicsAccRef.current += dt;
+      const idle = Math.abs(wantMouth) < 0.02 && !idleSwayEnabled;
+      const effective = idle ? physicsInterval * 3 : physicsInterval;
+      if (physicsAccRef.current < effective) {
+        skipSpringBones = true;
+      } else {
+        springDelta = physicsAccRef.current;
+        physicsAccRef.current = 0;
+      }
+    }
+
+    updateVRMSelective(vrm, dt, {
+      skipExpressions: optimization.morphOptimization && !expressionsDirty,
+      skipSpringBones,
+      springDelta,
+    });
     updateVRMFX(fxUniforms.current, shaderConfig, state.clock.elapsedTime);
     updateVRMOutline(vrm, shaderConfig);
   });
