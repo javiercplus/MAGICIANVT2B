@@ -12,6 +12,7 @@ import {
   computeAutoBlink,
   randomNextBlinkDelay,
   applyStandPose,
+  isVRM0,
 } from '@/lib/vrm/gazeMath';
 import { GAZE, LIPSYNC, AUTO_BLINK, SCENE, PHYSICS_INTERVAL } from '@/lib/vrm/constants';
 import type { GazeTarget, ShaderConfig, OptimizationConfig } from '@/lib/vrm/constants';
@@ -49,6 +50,7 @@ export function VRMAvatar(props: VRMAvatarProps) {
   const vrmRef = useRef<VRM | null>(null);
   const lastMouthRef = useRef(0);
   const lastBlinkRef = useRef(0);
+  const vrm0Ref = useRef(false);
   const physicsAccRef = useRef(0);
   const headBoneRef = useRef<THREE.Bone | null>(null);
   const neckBoneRef = useRef<THREE.Bone | null>(null);
@@ -71,6 +73,7 @@ export function VRMAvatar(props: VRMAvatarProps) {
   useEffect(() => {
     if (!vrmUrl) {
       vrmRef.current = null;
+      vrm0Ref.current = false;
       headBoneRef.current = null;
       neckBoneRef.current = null;
       leftEyeBoneRef.current = null;
@@ -93,6 +96,7 @@ export function VRMAvatar(props: VRMAvatarProps) {
         hipsBoneRef.current = vrm.humanoid?.getNormalizedBoneNode('hips') ?? null;
         spineBoneRef.current = vrm.humanoid?.getNormalizedBoneNode('spine') ?? null;
         applyStandPose(vrm);
+        vrm0Ref.current = isVRM0(vrm);
         applyVRMMaterialFX(vrm, fxUniforms.current);
 
         vrmScene.updateMatrixWorld(true);
@@ -116,6 +120,7 @@ export function VRMAvatar(props: VRMAvatarProps) {
       cancelled = true;
       setScene(null);
       vrmRef.current = null;
+      vrm0Ref.current = false;
       headBoneRef.current = null;
       neckBoneRef.current = null;
       leftEyeBoneRef.current = null;
@@ -163,19 +168,22 @@ export function VRMAvatar(props: VRMAvatarProps) {
       gazeCurrentRef.current, desired, GAZE.LERP_SPEED, dt
     );
 
+    // VRM 0.x normalized bones mirror X, which inverts up/down on head & eyes.
+    const flipPitch = vrm0Ref.current;
+
     const head = headBoneRef.current;
-    if (head) head.quaternion.setFromEuler(gazeToHeadEuler(gazeCurrentRef.current));
+    if (head) head.quaternion.setFromEuler(gazeToHeadEuler(gazeCurrentRef.current, GAZE.HEAD_ROT_LIMIT_DEG, flipPitch));
 
     const neck = neckBoneRef.current;
     if (neck) {
       const neckLimit = GAZE.HEAD_ROT_LIMIT_DEG * (1 - GAZE.HEAD_RATE);
-      neck.quaternion.setFromEuler(gazeToHeadEuler(gazeCurrentRef.current, neckLimit));
+      neck.quaternion.setFromEuler(gazeToHeadEuler(gazeCurrentRef.current, neckLimit, flipPitch));
     }
 
     const leftEye = leftEyeBoneRef.current;
     const rightEye = rightEyeBoneRef.current;
     if (leftEye && rightEye) {
-      const euler = gazeToEyeEuler(gazeCurrentRef.current);
+      const euler = gazeToEyeEuler(gazeCurrentRef.current, flipPitch);
       leftEye.quaternion.setFromEuler(euler);
       rightEye.quaternion.setFromEuler(euler);
     }
