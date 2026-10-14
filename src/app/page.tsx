@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Gauge } from 'lucide-react';
 import { VRMScene } from '@/components/vmm/VRMScene';
 import { ControlPanel } from '@/components/vmm/ControlPanel';
+import { OptimizationPanel } from '@/components/vmm/OptimizationPanel';
+import { Button } from '@/components/ui/button';
 import { Header } from '@/components/vmm/Header';
 import { DropZone } from '@/components/vmm/DropZone';
 import { HideControlsButton } from '@/components/vmm/HideControlsButton';
@@ -14,7 +16,7 @@ import { useLipSync } from '@/hooks/useLipSync';
 import { useScreenRecording } from '@/hooks/useScreenRecording';
 import { useAvatarDrag } from '@/hooks/useAvatarDrag';
 import { cn } from '@/lib/utils';
-import { DEFAULT_LIGHTING, DEFAULT_ADJUST, DEFAULT_SHADER, GREEN_SCREEN, ZOOM, type LightingConfig, type AdjustConfig, type ShaderConfig } from '@/lib/vrm/constants';
+import { DEFAULT_LIGHTING, DEFAULT_ADJUST, DEFAULT_SHADER, DEFAULT_OPTIMIZATION, GREEN_SCREEN, ZOOM, type LightingConfig, type AdjustConfig, type ShaderConfig, type OptimizationConfig, type Telemetry } from '@/lib/vrm/constants';
 import type { LoadVRMResult } from '@/lib/vrm/loadVRM';
 import { saveVrmToIndexedDB, loadVrmFromIndexedDB, saveConfig, loadConfig } from '@/lib/storage';
 
@@ -44,6 +46,9 @@ export default function Page() {
   const [lighting, setLighting] = useState<LightingConfig>(DEFAULT_LIGHTING);
   const [adjust, setAdjust] = useState<AdjustConfig>(DEFAULT_ADJUST);
   const [shader, setShader] = useState<ShaderConfig>(DEFAULT_SHADER);
+  const [optimization, setOptimization] = useState<OptimizationConfig>(DEFAULT_OPTIMIZATION);
+  const [telemetry, setTelemetry] = useState<Telemetry>({ fps: 0, textures: 0, calls: 0, geometries: 0 });
+  const [optPanelOpen, setOptPanelOpen] = useState(false);
   const [zoom, setZoom] = useState<number>(ZOOM.DEFAULT);
 
   const [isDragging, setIsDragging] = useState(false);
@@ -101,6 +106,12 @@ export default function Page() {
         const s = config.shader;
         if (s && typeof s === 'object') {
           setShader({ ...DEFAULT_SHADER, ...s });
+        }
+      }
+      if (config.optimization !== undefined) {
+        const o = config.optimization;
+        if (o && typeof o === 'object') {
+          setOptimization({ ...DEFAULT_OPTIMIZATION, ...o });
         }
       }
       if (typeof config.zoom === 'number') {
@@ -220,7 +231,7 @@ export default function Page() {
 
   const handleSaveConfig = useCallback(async () => {
     saveConfig({
-      gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, chromaColor, lighting, adjust, shader, zoom
+      gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, chromaColor, lighting, adjust, shader, optimization, zoom
     });
     if (vrmUrl && vrmUrl !== DEFAULT_VRM_URL) {
       try {
@@ -231,7 +242,7 @@ export default function Page() {
         console.error('Failed to save VRM blob', e);
       }
     }
-  }, [gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, chromaColor, lighting, adjust, shader, zoom, vrmUrl, vrmName]);
+  }, [gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, chromaColor, lighting, adjust, shader, optimization, zoom, vrmUrl, vrmName]);
 
   const displayVrmName = meta?.name || vrmName;
   const headerStatus = vrmStatus === 'loaded'
@@ -255,8 +266,10 @@ export default function Page() {
             lighting={lighting}
             adjust={adjust}
             shader={shader}
+            optimization={optimization}
             zoom={zoom}
             onZoomChange={setZoom}
+            onTelemetry={optPanelOpen ? setTelemetry : undefined}
             onLoaded={handleLoaded} onError={handleError}
           />
         </div>
@@ -284,7 +297,31 @@ export default function Page() {
             hidden={controlsHidden}
             onToggle={() => setControlsHidden((v) => !v)}
           />
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            onClick={() => setOptPanelOpen((v) => !v)}
+            title="Optimization panel"
+            className={cn(
+              'h-9 w-9 bg-zinc-900/85 border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800',
+              optPanelOpen && 'text-violet-300 border-violet-500/50',
+            )}
+          >
+            <Gauge className="w-4 h-4" />
+          </Button>
         </div>
+
+        {optPanelOpen && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40">
+            <OptimizationPanel
+              config={optimization}
+              telemetry={telemetry}
+              onChange={setOptimization}
+              onClose={() => setOptPanelOpen(false)}
+            />
+          </div>
+        )}
 
         <div className={cn(
           'absolute top-4 left-4 z-10 transition-all duration-300',
