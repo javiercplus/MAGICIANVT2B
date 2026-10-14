@@ -43,23 +43,32 @@ export function smoothDampGaze(
   };
 }
 
+// VRM 0.x normalized bones have their X axis mirrored relative to VRM 1.0
+// (see applyStandPose below). Because of that, a look-up/look-down pitch applied
+// to the normalized head/eye bones comes out inverted, so callers negate it.
+export function isVRM0(vrm: VRM): boolean {
+  return (vrm as { meta?: { metaVersion?: string } } | null)?.meta?.metaVersion === '0';
+}
+
 // Avatar faces +Z (toward camera). Avatar's right = -X world.
 // Mouse to viewer's right (+X world = avatar's LEFT) => head turns avatar's
 // LEFT = positive Y rotation (Three.js moves +Z forward toward +X).
 // Mouse above center (gaze.y < 0) => head looks UP = negative X rotation.
+// flipPitch: VRM 0.x only — negate the X (up/down) term, keep yaw.
 export function gazeToHeadEuler(
   gaze: GazeTarget,
-  limitDeg: number = GAZE.HEAD_ROT_LIMIT_DEG
+  limitDeg: number = GAZE.HEAD_ROT_LIMIT_DEG,
+  flipPitch = false
 ): THREE.Euler {
   const limitRad = THREE.MathUtils.degToRad(limitDeg);
   const yaw = gaze.x * limitRad;
-  const pitch = gaze.y * limitRad;
+  const pitch = (flipPitch ? -1 : 1) * gaze.y * limitRad;
   return new THREE.Euler(pitch, yaw, 0, 'YXZ');
 }
 
-export function gazeToEyeEuler(gaze: GazeTarget): THREE.Euler {
+export function gazeToEyeEuler(gaze: GazeTarget, flipPitch = false): THREE.Euler {
   const yawRad = gaze.x * THREE.MathUtils.degToRad(GAZE.EYE_YAW_PITCH_PER_RATE_DEG);
-  const pitchRad = gaze.y * THREE.MathUtils.degToRad(GAZE.EYE_YAW_PITCH_PER_RATE_DEG);
+  const pitchRad = (flipPitch ? -1 : 1) * gaze.y * THREE.MathUtils.degToRad(GAZE.EYE_YAW_PITCH_PER_RATE_DEG);
   const limit = THREE.MathUtils.degToRad(GAZE.EYE_ANGLE_LIMIT_DEG);
   const yaw = THREE.MathUtils.clamp(yawRad, -limit, limit);
   const pitch = THREE.MathUtils.clamp(pitchRad, -limit, limit);
@@ -100,8 +109,7 @@ export function applyStandPose(vrm: VRM): void {
   const humanoid = vrm.humanoid;
   if (!humanoid) return;
 
-  const isVRM0 = (vrm as any).meta?.metaVersion === '0';
-  const mirror = isVRM0 ? -1 : 1;
+  const mirror = isVRM0(vrm) ? -1 : 1;
 
   const upperArms = [
     { name: 'rightUpperArm' as const, z: mirror * STAND_POSE.RIGHT_ARM_Z_RAD },
