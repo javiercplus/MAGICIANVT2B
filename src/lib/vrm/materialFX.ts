@@ -187,8 +187,26 @@ type OutlineMaterial = THREE.Material & {
   outlineColorFactor?: THREE.Color;
 };
 
-// Replicates three-vrm's outline generation for meshes whose VRM did not
-// declare one. Native MToon outline = cloned material with isOutline + BackSide.
+// Face parts (mouth, eyes, brows, eyeline, highlight...) must never get a
+// generated outline: the shell would sit on top of them and cover the mouth
+// and eyes. VRM authors intentionally leave these without an outline.
+const FACE_PART_RE = /face|mouth|eye|brow|eyeline|eyelash|lash|teeth|tongue|highlight/i;
+
+function vrmHasNativeOutline(vrm: VRM): boolean {
+  let found = false;
+  vrm.scene.traverse((object) => {
+    if (found) return;
+    const mesh = object as THREE.Mesh;
+    if (!(mesh as THREE.Mesh).isMesh) return;
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    if (materials.some((m) => (m as OutlineMaterial)?.isOutline)) found = true;
+  });
+  return found;
+}
+
+// Fallback for models that ship no outline at all: replicate three-vrm's
+// generation, but skip face parts and only when there is no native outline to
+// preserve. Native MToon outline = cloned material with isOutline + BackSide.
 function ensureVRMOutline(vrm: VRM): void {
   vrm.scene.traverse((object) => {
     const mesh = object as THREE.Mesh;
@@ -200,6 +218,7 @@ function ensureVRMOutline(vrm: VRM): void {
       return;
     }
     if (!(material as THREE.Material & { isMToonMaterial?: boolean }).isMToonMaterial) return;
+    if (FACE_PART_RE.test(material.name || '')) return;
 
     const outline = material.clone() as OutlineMaterial;
     outline.name = `${material.name} (Outline)`;
@@ -221,7 +240,14 @@ function ensureVRMOutline(vrm: VRM): void {
 // Outline preset is inactive, the material's original values are restored.
 export function updateVRMOutline(vrm: VRM, config: ShaderConfig): void {
   const active = config.preset === 'outline';
-  if (active) ensureVRMOutline(vrm);
+
+  // Only synthesize outlines when the model has none at all, so we never add
+  // outlines the author deliberately omitted (e.g. the mouth). Done once.
+  const sceneData = vrm.scene.userData as Record<string, unknown>;
+  if (active && !sceneData._fxOutlineChecked) {
+    if (!vrmHasNativeOutline(vrm)) ensureVRMOutline(vrm);
+    sceneData._fxOutlineChecked = true;
+  }
 
   vrm.scene.traverse((object) => {
     const mesh = object as THREE.Mesh;
@@ -239,7 +265,9 @@ export function updateVRMOutline(vrm: VRM, config: ShaderConfig): void {
       }
 
       if (active) {
-        outline.outlineWidthFactor = Math.max(0.0008, config.intensity * 0.05);
+        // Native width is ~0.0008; keep this in the same order of magnitude so
+        // the shell stays subtle and never balloons over the face/mouth.
+        outline.outlineWidthFactor = 0.0004 + config.intensity * 0.0026;
         (outline.outlineColorFactor as THREE.Color).set(config.color);
       } else {
         outline.outlineWidthFactor = ud._fxOrigWidth as number;
