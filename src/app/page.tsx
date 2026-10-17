@@ -109,7 +109,13 @@ export default function Page() {
       if (config.shader !== undefined) {
         const s = config.shader;
         if (s && typeof s === 'object') {
-          setShader({ ...DEFAULT_SHADER, ...s });
+          const merged = { ...DEFAULT_SHADER, ...s };
+          // Old configs used a low bloom threshold that made white and the
+          // custom background glow. Bump them to the new emissive-only range.
+          if (typeof merged.bloomThreshold === 'number' && merged.bloomThreshold < 1) {
+            merged.bloomThreshold = DEFAULT_SHADER.bloomThreshold;
+          }
+          setShader(merged);
         }
       }
       if (config.optimization !== undefined) {

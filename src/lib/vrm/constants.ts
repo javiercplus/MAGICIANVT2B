@@ -171,7 +171,7 @@ export interface ShaderConfig {
   scanline: number;    // 0..1 scanline density
   bloom: number;       // UnrealBloom strength, 0 = off
   bloomRadius: number; // 0..1
-  bloomThreshold: number; // 0..1
+  bloomThreshold: number; // >1 => solo emissive HDR (no blancos/fondo)
 }
 
 export const DEFAULT_SHADER: ShaderConfig = {
@@ -182,5 +182,5 @@ export const DEFAULT_SHADER: ShaderConfig = {
   scanline: 0.35,
   bloom: 0.6,
   bloomRadius: 0.4,
-  bloomThreshold: 0.85,
+  bloomThreshold: 1.1,
 };
