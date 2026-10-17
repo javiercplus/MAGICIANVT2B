@@ -107,7 +107,7 @@ const StylizeShader = {
 
 export function PostFX({
   brightness, saturation, contrast,
-  bloomStrength = 0, bloomRadius = 0.4, bloomThreshold = 0.85,
+  bloomStrength = 0, bloomRadius = 0.4, bloomThreshold = 1.1,
   shader,
   fpsLimit, renderScale, pixelRatio, antiAlias,
 }: PostFXProps) {

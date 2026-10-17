@@ -519,8 +519,8 @@ export function ControlPanel(props: ControlPanelProps) {
                     label="Threshold"
                     value={shader.bloomThreshold}
                     min={0}
-                    max={1}
-                    step={0.01}
+                    max={3}
+                    step={0.05}
                     onChange={(v) => onShaderChange({ ...shader, bloomThreshold: v })}
                   />
                 </div>
@@ -528,6 +528,7 @@ export function ControlPanel(props: ControlPanelProps) {
                 <p className="text-[10px] text-zinc-500 leading-snug">
                   Model presets inject into VRM MToon (bones/morphs intact). Outline uses MToon&apos;s
                   native outline. Chromatic and Pixel are fullscreen. Bloom glows high-emissive parts.
+                  Keep threshold above 1 so white/highlights and the background don&apos;t glow.
                 </p>
               </div>
             </ScrollArea>
