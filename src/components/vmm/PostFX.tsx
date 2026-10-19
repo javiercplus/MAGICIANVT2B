@@ -12,7 +12,7 @@ import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import type { AdjustConfig, ShaderConfig } from '@/lib/vrm/constants';
 import { renderStats } from '@/lib/vrm/renderStats';
 
-export interface PostFXProps extends AdjustConfig {
+export interface PostFXProps extends Pick<AdjustConfig, 'brightness' | 'saturation' | 'contrast' | 'hue' | 'temperature'> {
   bloomStrength?: number;
   bloomRadius?: number;
   bloomThreshold?: number;
@@ -24,12 +24,17 @@ export interface PostFXProps extends AdjustConfig {
   antiAlias: boolean;
 }
 
+// Runs AFTER OutputPass, so it works on display-referred (sRGB) pixels. That
+// keeps 50% brightness at true 50%, avoids clipping HDR highlights, and makes
+// the controls behave like a color-grading filter. Neutral = 100%.
 const AdjustmentShader = {
   uniforms: {
     tDiffuse: { value: null },
     brightness: { value: 1 },
     saturation: { value: 1 },
     contrast: { value: 1 },
+    hue: { value: 0 },
+    temperature: { value: 0 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -43,17 +48,36 @@ const AdjustmentShader = {
     uniform float brightness;
     uniform float saturation;
     uniform float contrast;
+    uniform float hue;
+    uniform float temperature;
     varying vec2 vUv;
+
+    vec3 hueRotate(vec3 color, float angle) {
+      const vec3 k = vec3(0.57735026919);
+      float c = cos(angle);
+      float s = sin(angle);
+      return color * c + cross(k, color) * s + k * dot(k, color) * (1.0 - c);
+    }
 
     void main() {
       vec4 texel = texture2D(tDiffuse, vUv);
-      vec3 color = pow(max(texel.rgb, 0.0), vec3(1.0 / 2.2));
+      vec3 color = texel.rgb;
+
+      // Contrast around mid grey, then exposure/brightness.
       color = (color - 0.5) * contrast + 0.5;
       color *= brightness;
+
+      // White-balance style tint: positive = warm, negative = cool.
+      color.r *= 1.0 + temperature * 0.12;
+      color.g *= 1.0 + temperature * 0.02;
+      color.b *= 1.0 - temperature * 0.12;
+
+      // Hue rotation and saturation.
+      color = hueRotate(color, hue);
       float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
       color = mix(vec3(luma), color, saturation);
-      color = clamp(color, 0.0, 1.0);
-      gl_FragColor = vec4(pow(color, vec3(2.2)), texel.a);
+
+      gl_FragColor = vec4(clamp(color, 0.0, 1.0), texel.a);
     }
   `,
 };
@@ -106,7 +130,7 @@ const StylizeShader = {
 };
 
 export function PostFX({
-  brightness, saturation, contrast,
+  brightness, saturation, contrast, hue, temperature,
   bloomStrength = 0, bloomRadius = 0.4, bloomThreshold = 1.1,
   shader,
   fpsLimit, renderScale, pixelRatio, antiAlias,
@@ -123,23 +147,46 @@ export function PostFX({
     const composer = new EffectComposer(gl);
     composer.addPass(new RenderPass(scene, camera));
 
+    // Bloom works on the linear HDR scene, before tone mapping.
     const bloom = new UnrealBloomPass(
       new THREE.Vector2(size.width, size.height),
       bloomStrength, bloomRadius, bloomThreshold,
     );
     composer.addPass(bloom);
 
+    // Single tone-mapping + sRGB conversion step. Scene materials have
+    // toneMapped=false so MToon/PBR do not tone map a second time.
+    composer.addPass(new OutputPass());
+
+    // Color grading and full-screen stylization run in display space.
     const stylize = new ShaderPass(StylizeShader);
+    stylize.uniforms.uChromatic.value =
+      shader.preset === 'chromatic' ? shader.intensity * 0.03 : 0;
+    stylize.uniforms.uPixel.value =
+      shader.preset === 'pixel' ? Math.round(1 + shader.intensity * 23) : 1;
     composer.addPass(stylize);
 
     const pass = new ShaderPass(AdjustmentShader);
+    pass.uniforms.brightness.value = brightness;
+    pass.uniforms.saturation.value = saturation;
+    pass.uniforms.contrast.value = contrast;
+    pass.uniforms.hue.value = THREE.MathUtils.degToRad(hue);
+    pass.uniforms.temperature.value = temperature;
     composer.addPass(pass);
 
-    composer.addPass(new OutputPass());
-
     const fxaa = new ShaderPass(FXAAShader);
-    fxaa.enabled = false;
+    fxaa.enabled = antiAlias;
     composer.addPass(fxaa);
+
+    // Apply the current render scale/pixel ratio immediately: this composer is
+    // rebuilt when switching perspective/orthographic cameras.
+    const dpr = gl.getPixelRatio();
+    composer.setPixelRatio(dpr);
+    composer.setSize(size.width * renderScale, size.height * renderScale);
+    const internalW = Math.max(1, size.width * renderScale * dpr);
+    const internalH = Math.max(1, size.height * renderScale * dpr);
+    fxaa.uniforms.resolution.value.set(1 / internalW, 1 / internalH);
+    stylize.uniforms.uResolution.value.set(internalW, internalH);
 
     composerRef.current = composer;
     passRef.current = pass;
@@ -179,8 +226,10 @@ export function PostFX({
       pass.uniforms.brightness.value = brightness;
       pass.uniforms.saturation.value = saturation;
       pass.uniforms.contrast.value = contrast;
+      pass.uniforms.hue.value = THREE.MathUtils.degToRad(hue);
+      pass.uniforms.temperature.value = temperature;
     }
-  }, [brightness, saturation, contrast]);
+  }, [brightness, saturation, contrast, hue, temperature]);
 
   useEffect(() => {
     const bloom = bloomRef.current;

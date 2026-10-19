@@ -1,64 +1,109 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { DRAG } from '@/lib/vrm/constants';
+import { CAMERA, DEFAULT_MODEL_ROTATION, DRAG, type ModelRotation } from '@/lib/vrm/constants';
 
 interface UseAvatarDragResult {
-  /** Avatar offset in world units; the avatar reads this each frame. */
   offsetRef: React.RefObject<THREE.Vector3>;
-  /** True while the user is actively middle-mouse-dragging. */
+  rotationRef: React.RefObject<ModelRotation>;
   isDraggingRef: React.RefObject<boolean>;
+  resetView: () => void;
 }
 
-// Middle-mouse-button drag to translate the avatar in world space.
-// Left/right drag = move avatar on screen X; up/down = move on screen Y.
-// Pressing the middle button also disables pointer lock if active.
+type DragMode = 'move' | 'rotate' | null;
+
 export function useAvatarDrag(): UseAvatarDragResult {
   const offsetRef = useRef(new THREE.Vector3(0, 0, 0));
+  const rotationRef = useRef<ModelRotation>({ ...DEFAULT_MODEL_ROTATION });
   const isDraggingRef = useRef(false);
-  const dragStartRef = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
+  const modeRef = useRef<DragMode>(null);
+  const dragStartRef = useRef({ x: 0, y: 0, ox: 0, oy: 0, rx: 0, ry: 0 });
+
+  const resetView = useCallback(() => {
+    offsetRef.current.set(0, 0, 0);
+    rotationRef.current.x = 0;
+    rotationRef.current.y = 0;
+  }, []);
 
   useEffect(() => {
+    const canvas = () => document.querySelector('canvas');
+
     const onMouseDown = (e: MouseEvent) => {
-      if (e.button !== 1) return; // 1 = middle button
+      const el = canvas();
+      const onCanvas = !!el && el.contains(e.target as Node);
+
+      // Ctrl + left drag rotates the model.
+      if (e.button === 0 && e.ctrlKey && onCanvas) {
+        e.preventDefault();
+        modeRef.current = 'rotate';
+        isDraggingRef.current = true;
+        dragStartRef.current = {
+          x: e.clientX,
+          y: e.clientY,
+          ox: 0,
+          oy: 0,
+          rx: rotationRef.current.x,
+          ry: rotationRef.current.y,
+        };
+        if (el) el.style.cursor = 'grabbing';
+        return;
+      }
+
+      // Middle drag repositions the avatar.
+      if (e.button !== 1) return;
       e.preventDefault();
+      modeRef.current = 'move';
       isDraggingRef.current = true;
       dragStartRef.current = {
         x: e.clientX,
         y: e.clientY,
         ox: offsetRef.current.x,
         oy: offsetRef.current.y,
+        rx: 0,
+        ry: 0,
       };
-      // Prevent page from auto-scrolling on middle-click
-      const canvas = document.querySelector('canvas');
-      if (canvas) canvas.style.cursor = 'move';
+      if (el) el.style.cursor = 'move';
     };
 
     const onMouseMove = (e: MouseEvent) => {
       if (!isDraggingRef.current) return;
       const dx = e.clientX - dragStartRef.current.x;
       const dy = e.clientY - dragStartRef.current.y;
-      offsetRef.current.x = dragStartRef.current.ox + dx * DRAG.SENSITIVITY;
-      offsetRef.current.y = dragStartRef.current.oy - dy * DRAG.SENSITIVITY;
+
+      if (modeRef.current === 'move') {
+        offsetRef.current.x = dragStartRef.current.ox + dx * DRAG.SENSITIVITY;
+        offsetRef.current.y = dragStartRef.current.oy - dy * DRAG.SENSITIVITY;
+        return;
+      }
+
+      if (modeRef.current === 'rotate') {
+        const nextX = dragStartRef.current.rx + dy * CAMERA.ROTATE_SENSITIVITY;
+        rotationRef.current.x = THREE.MathUtils.clamp(
+          nextX, -CAMERA.PITCH_LIMIT_RAD, CAMERA.PITCH_LIMIT_RAD,
+        );
+        rotationRef.current.y = dragStartRef.current.ry + dx * CAMERA.ROTATE_SENSITIVITY;
+      }
     };
 
     const onMouseUp = (e: MouseEvent) => {
-      if (e.button !== 1) return;
+      if (!isDraggingRef.current) return;
+      if (e.button !== 0 && e.button !== 1) return;
+      if (modeRef.current === 'move' && e.button !== 1) return;
+      if (modeRef.current === 'rotate' && e.button !== 0) return;
+      modeRef.current = null;
       isDraggingRef.current = false;
-      const canvas = document.querySelector('canvas');
-      if (canvas) canvas.style.cursor = '';
+      const el = canvas();
+      if (el) el.style.cursor = '';
     };
 
     const onContextMenu = (e: MouseEvent) => {
-      // Suppress the browser's middle-click auto-scroll cursor on the canvas
-      const canvas = document.querySelector('canvas');
-      if (canvas && canvas.contains(e.target as Node)) {
+      const el = canvas();
+      if (el && el.contains(e.target as Node)) {
         e.preventDefault();
       }
     };
 
-    // Disable middle-click auto-scroll on the canvas
     const onAuxClick = (e: MouseEvent) => {
       if (e.button === 1) e.preventDefault();
     };
@@ -78,5 +123,5 @@ export function useAvatarDrag(): UseAvatarDragResult {
     };
   }, []);
 
-  return { offsetRef, isDraggingRef };
+  return { offsetRef, rotationRef, isDraggingRef, resetView };
 }

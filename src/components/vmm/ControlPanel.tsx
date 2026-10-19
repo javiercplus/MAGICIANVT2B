@@ -1,41 +1,40 @@
 'use client';
 
 import {
-  MousePointerClick, Mic, Eye, Upload, RotateCcw, AlertCircle,
-  Loader2, CircleCheck, Square, Circle, Palette, Crosshair,
-  Image as ImageIcon, Sun, Save, Activity, Dna, SlidersHorizontal, ZoomIn,
-  Sparkles, Wand2,
+  MousePointerClick, Mic, Eye, RotateCcw, AlertCircle,
+  Square, Circle, Palette, Crosshair,
+  Image as ImageIcon, Sun, Activity, Dna, SlidersHorizontal, ZoomIn, Monitor,
+  Camera, Focus, Rotate3d, Gauge,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
-import { ZOOM, type LightingConfig, type AdjustConfig, type ShaderConfig, type ShaderPreset } from '@/lib/vrm/constants';
+import { LightSlider, ToggleRow, StatusPill, type VrmStatus } from './controls';
+import {
+  CAMERA, ZOOM,
+  type LightingConfig, type AdjustConfig,
+  type ToneMappingMode,
+} from '@/lib/vrm/constants';
 
-const SHADER_PRESETS: { value: ShaderPreset; label: string }[] = [
-  { value: 'off', label: 'Off' },
-  { value: 'hologram', label: 'Hologram' },
-  { value: 'dissolve', label: 'Dissolve' },
-  { value: 'glow', label: 'Glow' },
-  { value: 'scanline', label: 'Scanline' },
-  { value: 'outline', label: 'Outline' },
-  { value: 'chromatic', label: 'Chromatic' },
-  { value: 'pixel', label: 'Pixel' },
+const TONE_MAPPINGS: { value: ToneMappingMode; label: string }[] = [
+  { value: 'neutral', label: 'Neutral' },
+  { value: 'aces', label: 'ACES' },
+  { value: 'agx', label: 'AgX' },
+  { value: 'linear', label: 'Linear' },
+  { value: 'none', label: 'None' },
 ];
 
 interface ControlPanelProps {
   vrmName: string;
-  vrmStatus: 'idle' | 'loading' | 'loaded' | 'error';
+  vrmStatus: VrmStatus;
   vrmError: string | null;
   gazeEnabled: boolean;
   captureOutside: boolean;
+  globalTracking: boolean;
   micEnabled: boolean;
   autoBlinkEnabled: boolean;
   randomEyesEnabled: boolean;
@@ -52,10 +51,12 @@ interface ControlPanelProps {
   recordingSec: number;
   lighting: LightingConfig;
   adjust: AdjustConfig;
-  shader: ShaderConfig;
   zoom: number;
+  fov: number;
+  orthographic: boolean;
   onGazeToggle: (v: boolean) => void;
   onCaptureOutsideToggle: (v: boolean) => void;
+  onGlobalTrackingToggle: (v: boolean) => void;
   onMicToggle: (v: boolean) => void;
   onAutoBlinkToggle: (v: boolean) => void;
   onRandomEyesToggle: (v: boolean) => void;
@@ -66,59 +67,13 @@ interface ControlPanelProps {
   onChromaColorChange: (c: string) => void;
   onLightingChange: (l: LightingConfig) => void;
   onAdjustChange: (a: AdjustConfig) => void;
-  onShaderChange: (s: ShaderConfig) => void;
   onZoomChange: (z: number) => void;
-  onPickFile: () => void;
-  onResetVRM: () => void;
+  onFovChange: (f: number) => void;
+  onOrthographicToggle: (v: boolean) => void;
+  onResetView: () => void;
   onPickBackground: () => void;
   onClearBackground: () => void;
   onRecordToggle: () => void;
-  onSaveConfig: () => void;
-}
-
-function StatusPill({ status, error }: { status: ControlPanelProps['vrmStatus']; error?: string | null }) {
-  if (status === 'loading') return (
-    <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40">
-      <Loader2 className="w-3 h-3 mr-1 animate-spin" />Loading
-    </Badge>
-  );
-  if (status === 'error' || error) return (
-    <Badge className="bg-rose-500/20 text-rose-300 border-rose-500/40">
-      <AlertCircle className="w-3 h-3 mr-1" />Error
-    </Badge>
-  );
-  if (status === 'loaded') return (
-    <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40">
-      <CircleCheck className="w-3 h-3 mr-1" />Loaded
-    </Badge>
-  );
-  return <Badge className="bg-zinc-700/40 text-zinc-400 border-zinc-600/40">Idle</Badge>;
-}
-
-interface ToggleRowProps {
-  icon: React.ReactNode;
-  label: string;
-  description: string;
-  checked: boolean;
-  onCheckedChange: (v: boolean) => void;
-  accentClass?: string;
-  indent?: boolean;
-}
-
-function ToggleRow({ icon, label, description, checked, onCheckedChange, accentClass, indent }: ToggleRowProps) {
-  return (
-    <div className={cn('flex items-start gap-3 rounded-lg p-2 hover:bg-zinc-800/40 transition-colors', indent && 'ml-8')}>
-      <div className={cn('flex items-center justify-center rounded-md w-7 h-7 shrink-0 mt-0.5',
-        checked ? accentClass ?? 'bg-violet-500/20 text-violet-300' : 'bg-zinc-800/60 text-zinc-500')}>
-        {icon}
-      </div>
-      <div className="flex-1 min-w-0">
-        <Label htmlFor={`toggle-${label}`} className="text-sm font-medium text-zinc-100 cursor-pointer">{label}</Label>
-        <p className="text-[11px] text-zinc-500 leading-tight mt-0.5">{description}</p>
-      </div>
-      <Switch id={`toggle-${label}`} checked={checked} onCheckedChange={onCheckedChange} />
-    </div>
-  );
 }
 
 function formatDuration(sec: number): string {
@@ -127,48 +82,18 @@ function formatDuration(sec: number): string {
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
-interface LightSliderProps {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  unit?: string;
-  decimals?: number;
-  onChange: (v: number) => void;
-}
-
-function LightSlider({ label, value, min, max, step, unit, decimals = 2, onChange }: LightSliderProps) {
-  return (
-    <div className="space-y-1">
-      <div className="flex justify-between items-center">
-        <span className="text-[11px] text-zinc-400">{label}</span>
-        <span className="text-[11px] text-zinc-300 tabular-nums">
-          {Number.isInteger(step) ? value : value.toFixed(decimals)}{unit ?? ''}
-        </span>
-      </div>
-      <Slider
-        value={[value]}
-        min={min}
-        max={max}
-        step={step}
-        onValueChange={(v) => onChange(v[0])}
-        className="h-1.5"
-      />
-    </div>
-  );
-}
-
 export function ControlPanel(props: ControlPanelProps) {
   const {
     vrmName, vrmStatus, vrmError,
-    gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, chromaColor, hasBackground,
+    gazeEnabled, captureOutside, globalTracking, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, chromaColor, hasBackground,
     micLevel, micReady, micError,
     isRecording, recordingSec,
-    lighting, adjust, shader, zoom,
-    onGazeToggle, onCaptureOutsideToggle, onMicToggle, onAutoBlinkToggle, onRandomEyesToggle, onRandomEyesIntensityChange, onIdleSwayToggle, onIdleSwayIntensityChange, onGreenScreenToggle, onChromaColorChange,
-    onLightingChange, onAdjustChange, onShaderChange, onZoomChange,
-    onPickFile, onResetVRM, onPickBackground, onClearBackground, onRecordToggle, onSaveConfig,
+    lighting, adjust, zoom,
+    fov, orthographic,
+    onGazeToggle, onCaptureOutsideToggle, onGlobalTrackingToggle, onMicToggle, onAutoBlinkToggle, onRandomEyesToggle, onRandomEyesIntensityChange, onIdleSwayToggle, onIdleSwayIntensityChange, onGreenScreenToggle, onChromaColorChange,
+    onLightingChange, onAdjustChange, onZoomChange,
+    onFovChange, onOrthographicToggle, onResetView,
+    onPickBackground, onClearBackground, onRecordToggle,
   } = props;
 
   return (
@@ -178,70 +103,42 @@ export function ControlPanel(props: ControlPanelProps) {
     )}>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-sm font-semibold tracking-wide text-zinc-200">Avatar</CardTitle>
+          <CardTitle className="text-sm font-semibold tracking-wide text-zinc-200">Options</CardTitle>
           <StatusPill status={vrmStatus} error={vrmError} />
         </div>
         <p className="text-xs text-zinc-400 truncate" title={vrmName}>{vrmName}</p>
+        {(vrmError || micError) && (
+          <div className="mt-2 text-[11px] text-rose-300 bg-rose-950/40 border border-rose-800/40 rounded-md p-1.5 flex items-start gap-1.5">
+            <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            <span className="leading-tight">{vrmError || micError}</span>
+          </div>
+        )}
       </CardHeader>
 
       <CardContent className="p-3 pt-0">
-        <Tabs defaultValue="avatar" className="w-full">
+        <Tabs defaultValue="tracking" className="w-full">
           <TabsList className="grid w-full grid-cols-6 bg-zinc-800/60 h-8">
-            <TabsTrigger value="avatar" className="text-[10px] uppercase tracking-wider">Avatar</TabsTrigger>
-            <TabsTrigger value="motion" className="text-[10px] uppercase tracking-wider">Motion</TabsTrigger>
-            <TabsTrigger value="scene" className="text-[10px] uppercase tracking-wider">Scene</TabsTrigger>
-            <TabsTrigger value="lighting" className="text-[10px] uppercase tracking-wider">Light</TabsTrigger>
-            <TabsTrigger value="adjust" className="text-[10px] uppercase tracking-wider">Adjust</TabsTrigger>
-            <TabsTrigger value="shaders" className="text-[10px] uppercase tracking-wider">Shaders</TabsTrigger>
+            <TabsTrigger value="tracking" className="text-[9px] px-0 uppercase tracking-wider">Track</TabsTrigger>
+            <TabsTrigger value="motion" className="text-[9px] px-0 uppercase tracking-wider">Motion</TabsTrigger>
+            <TabsTrigger value="scene" className="text-[9px] px-0 uppercase tracking-wider">Scene</TabsTrigger>
+            <TabsTrigger value="camera" className="text-[9px] px-0 uppercase tracking-wider">Camera</TabsTrigger>
+            <TabsTrigger value="lighting" className="text-[9px] px-0 uppercase tracking-wider">Light</TabsTrigger>
+            <TabsTrigger value="adjust" className="text-[9px] px-0 uppercase tracking-wider">Color</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="avatar" className="mt-3 space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={onPickFile}
-                className="bg-violet-600/20 border-violet-500/40 hover:bg-violet-600/40 hover:text-white text-violet-100">
-                <Upload className="w-3.5 h-3.5 mr-1.5" />Open .vrm
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={onResetVRM}
-                className="bg-zinc-800/60 border-zinc-700 hover:bg-zinc-700 hover:text-white text-zinc-200">
-                <RotateCcw className="w-3.5 h-3.5 mr-1.5" />Sample
-              </Button>
-            </div>
-            
-            <Button type="button" variant="outline" size="sm" onClick={onSaveConfig}
-              className="w-full bg-emerald-600/20 border-emerald-500/40 hover:bg-emerald-600/40 hover:text-white text-emerald-100">
-              <Save className="w-3.5 h-3.5 mr-1.5" />Save Config & Avatar
-            </Button>
-
-            <p className="text-[11px] text-zinc-500 leading-snug">
-              Drag a .vrm anywhere, or <span className="text-zinc-300">Open .vrm</span>.
-              Middle-click drag to move avatar.
-            </p>
-
-            <Button type="button" size="sm" onClick={onRecordToggle}
-              className={cn('w-full justify-center font-medium',
-                isRecording ? 'bg-rose-600 hover:bg-rose-500 text-white' : 'bg-rose-600/80 hover:bg-rose-500 text-white')}>
-              {isRecording ? (
-                <><Square className="w-3.5 h-3.5 mr-1.5 fill-current" />Stop · {formatDuration(recordingSec)}</>
-              ) : (
-                <><Circle className="w-3 h-3 mr-1.5 fill-current" />Record screen</>
-              )}
-            </Button>
-
-            {(vrmError || micError) && (
-              <div className="text-xs text-rose-300 bg-rose-950/40 border border-rose-800/40 rounded-md p-2 flex items-start gap-1.5">
-                <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                <span className="leading-tight">{vrmError || micError}</span>
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="motion" className="mt-3 space-y-3">
+          <TabsContent value="tracking" className="mt-3 space-y-3">
             <ScrollArea className="max-h-[400px]">
               <div className="space-y-1 pr-1">
                 <ToggleRow icon={<MousePointerClick className="w-4 h-4" />}
                   label="Gaze Tracking" description="Head + eyes follow mouse. Off = forward."
                   checked={gazeEnabled} onCheckedChange={onGazeToggle} accentClass="bg-violet-500/20 text-violet-300" />
                 {gazeEnabled && (
+                  <ToggleRow icon={<Monitor className="w-3.5 h-3.5" />}
+                    label="Global Tracking" description="Follow cursor even outside the window."
+                    checked={globalTracking} onCheckedChange={onGlobalTrackingToggle}
+                    accentClass="bg-emerald-500/20 text-emerald-300" indent />
+                )}
+                {gazeEnabled && !globalTracking && (
                   <ToggleRow icon={<Crosshair className="w-3.5 h-3.5" />}
                     label="Capture Outside" description="Pointer lock: click canvas, Esc to exit."
                     checked={captureOutside} onCheckedChange={onCaptureOutsideToggle}
@@ -263,6 +160,16 @@ export function ControlPanel(props: ControlPanelProps) {
                     />
                   </div>
                 )}
+              </div>
+            </ScrollArea>
+            <p className="text-[10px] text-zinc-500 leading-snug">
+              Global Tracking reads the system cursor. On Wayland the app relaunches on X11 (XWayland) so it works; opt out with MAGICIAN_NO_XWAYLAND=1.
+            </p>
+          </TabsContent>
+
+          <TabsContent value="motion" className="mt-3 space-y-3">
+            <ScrollArea className="max-h-[400px]">
+              <div className="space-y-1 pr-1">
                 <ToggleRow icon={<Mic className="w-4 h-4" />}
                   label="LipSync (Mic)" description="Mouth open from mic amplitude."
                   checked={micEnabled} onCheckedChange={onMicToggle} accentClass="bg-fuchsia-500/20 text-fuchsia-300" />
@@ -323,216 +230,292 @@ export function ControlPanel(props: ControlPanelProps) {
                 checked={hasBackground} onCheckedChange={(v) => v ? onPickBackground() : onClearBackground()}
                 accentClass="bg-sky-500/20 text-sky-300" />
             </div>
-
-            <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
-              <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
-                <ZoomIn className="w-3.5 h-3.5 text-violet-300" />Zoom
-              </div>
-              <LightSlider
-                label="Camera zoom"
-                value={zoom}
-                min={ZOOM.MIN}
-                max={ZOOM.MAX}
-                step={0.05}
-                onChange={onZoomChange}
-              />
-              <p className="text-[10px] text-zinc-500 leading-snug">
-                Scroll the mouse wheel over the canvas to zoom.
-              </p>
-            </div>
+            <Button type="button" size="sm" onClick={onRecordToggle}
+              className={cn('w-full justify-center font-medium',
+                isRecording ? 'bg-rose-600 hover:bg-rose-500 text-white' : 'bg-rose-600/80 hover:bg-rose-500 text-white')}>
+              {isRecording ? (
+                <><Square className="w-3.5 h-3.5 mr-1.5 fill-current" />Stop · {formatDuration(recordingSec)}</>
+              ) : (
+                <><Circle className="w-3 h-3 mr-1.5 fill-current" />Record screen</>
+              )}
+            </Button>
           </TabsContent>
 
-          <TabsContent value="lighting" className="mt-3 space-y-2">
-            <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
-              <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
-                <Sun className="w-3.5 h-3.5 text-amber-300" />Front
-              </div>
-              <LightSlider
-                label="Intensity"
-                value={lighting.front}
-                min={0}
-                max={3}
-                step={0.05}
-                onChange={(v) => onLightingChange({ ...lighting, front: v })}
-              />
-            </div>
+          <TabsContent value="camera" className="mt-3 space-y-2">
+            <ScrollArea className="max-h-[420px]">
+              <div className="space-y-2 pr-1">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
+                    <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
+                      <ZoomIn className="w-3.5 h-3.5 text-violet-300" />Zoom
+                    </div>
+                    <LightSlider
+                      label="Zoom"
+                      value={zoom}
+                      min={ZOOM.MIN}
+                      max={ZOOM.MAX}
+                      step={0.05}
+                      onChange={onZoomChange}
+                    />
+                    <p className="text-[10px] text-zinc-500 leading-snug">
+                      Dolly: moves the camera closer/farther without changing the lens.
+                    </p>
+                  </div>
 
-            <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
-              <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
-                <Sun className="w-3.5 h-3.5 text-sky-300" />Top
-              </div>
-              <LightSlider
-                label="Intensity"
-                value={lighting.top}
-                min={0}
-                max={3}
-                step={0.05}
-                onChange={(v) => onLightingChange({ ...lighting, top: v })}
-              />
-            </div>
-
-            <p className="text-[10px] text-zinc-500 leading-snug pt-1">
-              Front light faces the avatar; Top light comes from above. Ambient base is fixed.
-            </p>
-          </TabsContent>
-
-          <TabsContent value="adjust" className="mt-3 space-y-2">
-            <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
-              <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
-                <SlidersHorizontal className="w-3.5 h-3.5 text-amber-300" />Brightness
-              </div>
-              <LightSlider
-                label="Amount"
-                value={adjust.brightness}
-                min={0}
-                max={2}
-                step={0.05}
-                onChange={(v) => onAdjustChange({ ...adjust, brightness: v })}
-              />
-            </div>
-
-            <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
-              <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
-                <SlidersHorizontal className="w-3.5 h-3.5 text-fuchsia-300" />Saturation
-              </div>
-              <LightSlider
-                label="Amount"
-                value={adjust.saturation}
-                min={0}
-                max={2}
-                step={0.05}
-                onChange={(v) => onAdjustChange({ ...adjust, saturation: v })}
-              />
-            </div>
-
-            <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
-              <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
-                <SlidersHorizontal className="w-3.5 h-3.5 text-sky-300" />Contrast
-              </div>
-              <LightSlider
-                label="Amount"
-                value={adjust.contrast}
-                min={0}
-                max={2}
-                step={0.05}
-                onChange={(v) => onAdjustChange({ ...adjust, contrast: v })}
-              />
-            </div>
-
-            <p className="text-[10px] text-zinc-500 leading-snug pt-1">
-              Color adjustments apply to the rendered avatar and are included in recordings.
-            </p>
-          </TabsContent>
-
-          <TabsContent value="shaders" className="mt-3 space-y-3">
-            <ScrollArea className="max-h-[400px]">
-              <div className="space-y-3 pr-1">
-                <div className="space-y-1.5">
-                  <span className="text-[10px] uppercase tracking-wider text-zinc-500">Preset</span>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {SHADER_PRESETS.map((p) => (
-                      <button
-                        key={p.value}
-                        type="button"
-                        onClick={() => onShaderChange({
-                          ...shader,
-                          preset: p.value,
-                          intensity: p.value === 'off' ? shader.intensity : Math.max(shader.intensity, 0.05),
-                        })}
-                        className={cn(
-                          'text-[10px] py-1.5 rounded-md border transition-colors',
-                          shader.preset === p.value
-                            ? 'bg-violet-600/30 border-violet-500/50 text-violet-100'
-                            : 'bg-zinc-800/40 border-zinc-700/60 text-zinc-400 hover:bg-zinc-700/50 hover:text-zinc-200',
-                        )}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
+                  <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
+                    <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
+                      <Focus className="w-3.5 h-3.5 text-amber-300" />Field of view
+                    </div>
+                    <LightSlider
+                      label="FOV"
+                      value={fov}
+                      min={CAMERA.FOV_MIN}
+                      max={CAMERA.FOV_MAX}
+                      step={1}
+                      unit="°"
+                      onChange={onFovChange}
+                    />
+                    <p className="text-[10px] text-zinc-500 leading-snug">
+                      Lens angle: lower = tighter, higher = wider. Does not move the camera.
+                      {orthographic && ' In ortho it sets the base framing.'}
+                    </p>
                   </div>
                 </div>
 
-                <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
-                  <div className="flex items-center justify-between">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
                     <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
-                      <Sparkles className="w-3.5 h-3.5 text-violet-300" />Effect
+                      <Camera className="w-3.5 h-3.5 text-sky-300" />Projection
                     </div>
-                    <input
-                      type="color"
-                      value={shader.color}
-                      onChange={(e) => onShaderChange({ ...shader, color: e.target.value })}
-                      className="h-6 w-10 rounded border border-zinc-700 bg-transparent cursor-pointer"
-                      aria-label="Effect color"
+                    <ToggleRow icon={<Gauge className="w-3.5 h-3.5" />}
+                      label="Orthographic"
+                      description="Parallel projection, no perspective distortion."
+                      checked={orthographic} onCheckedChange={onOrthographicToggle}
+                      accentClass="bg-sky-500/20 text-sky-300" />
+                  </div>
+
+                  <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
+                    <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
+                      <Rotate3d className="w-3.5 h-3.5 text-emerald-300" />Rotation
+                    </div>
+                    <p className="text-[10px] text-zinc-500 leading-snug">
+                      <span className="text-zinc-300">Ctrl</span> + left-drag over the canvas rotates
+                      the model. Middle-drag moves it.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={onResetView}
+                      className="w-full h-7 bg-zinc-800/60 border-zinc-700 hover:bg-zinc-700 hover:text-white text-zinc-200"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 mr-1.5" />Reset view
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </ScrollArea>
+          </TabsContent>
+
+          <TabsContent value="lighting" className="mt-3 space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
+                <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
+                  <Sun className="w-3.5 h-3.5 text-amber-300" />Front / key
+                </div>
+                <LightSlider
+                  label="Intensity"
+                  value={lighting.front}
+                  min={0}
+                  max={3}
+                  step={0.05}
+                  onChange={(v) => onLightingChange({ ...lighting, front: v })}
+                />
+                <LightSlider
+                  label="Direction"
+                  value={lighting.frontAngle}
+                  min={-180}
+                  max={180}
+                  step={5}
+                  unit="°"
+                  onChange={(v) => onLightingChange({ ...lighting, frontAngle: v })}
+                />
+              </div>
+
+              <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
+                <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
+                  <Sun className="w-3.5 h-3.5 text-sky-300" />Top / fill
+                </div>
+                <LightSlider
+                  label="Intensity"
+                  value={lighting.top}
+                  min={0}
+                  max={3}
+                  step={0.05}
+                  onChange={(v) => onLightingChange({ ...lighting, top: v })}
+                />
+                <LightSlider
+                  label="Direction"
+                  value={lighting.topAngle}
+                  min={-180}
+                  max={180}
+                  step={5}
+                  unit="°"
+                  onChange={(v) => onLightingChange({ ...lighting, topAngle: v })}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-lg p-2 bg-zinc-800/30 border border-zinc-800 space-y-1">
+              <p className="text-[10px] text-zinc-500 leading-snug">
+                Direction orbits each light around the avatar (0° = straight in front).
+                Negative values move it to the viewer&apos;s right, positive to the left.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onLightingChange({ ...lighting, frontAngle: 0, topAngle: 0 })}
+                className="w-full h-7 bg-zinc-800/60 border-zinc-700 hover:bg-zinc-700 hover:text-white text-zinc-200"
+              >
+                <RotateCcw className="w-3.5 h-3.5 mr-1.5" />Reset light direction
+              </Button>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="adjust" className="mt-3 space-y-2">
+            <ScrollArea className="max-h-[420px]">
+              <div className="space-y-2 pr-1">
+                <div className="flex items-center justify-between px-0.5">
+                  <span className="text-[10px] uppercase tracking-wider text-zinc-500">Color filter</span>
+                  <span className="text-[10px] text-zinc-500">100% = neutral</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
+                    <div className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-200">
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-amber-300 shrink-0" />Bright.
+                    </div>
+                    <LightSlider
+                      label="Amount"
+                      value={adjust.brightness}
+                      min={0}
+                      max={2}
+                      step={0.01}
+                      percent
+                      onChange={(v) => onAdjustChange({ ...adjust, brightness: v })}
                     />
                   </div>
-                  <LightSlider
-                    label={shader.preset === 'outline' ? 'Outline width' : 'Intensity'}
-                    value={shader.intensity}
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    onChange={(v) => onShaderChange({ ...shader, intensity: v })}
-                  />
-                  {(shader.preset === 'hologram' || shader.preset === 'scanline') && (
+
+                  <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
+                    <div className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-200">
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-fuchsia-300 shrink-0" />Satur.
+                    </div>
                     <LightSlider
-                      label="Scanline density"
-                      value={shader.scanline}
+                      label="Amount"
+                      value={adjust.saturation}
                       min={0}
-                      max={1}
+                      max={2}
                       step={0.01}
-                      onChange={(v) => onShaderChange({ ...shader, scanline: v })}
+                      percent
+                      onChange={(v) => onAdjustChange({ ...adjust, saturation: v })}
                     />
-                  )}
-                  {shader.preset === 'dissolve' && (
+                  </div>
+
+                  <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
+                    <div className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-200">
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-sky-300 shrink-0" />Contrast
+                    </div>
                     <LightSlider
-                      label="Dissolve"
-                      value={shader.dissolve}
+                      label="Amount"
+                      value={adjust.contrast}
                       min={0}
-                      max={1}
+                      max={2}
                       step={0.01}
-                      onChange={(v) => onShaderChange({ ...shader, dissolve: v })}
+                      percent
+                      onChange={(v) => onAdjustChange({ ...adjust, contrast: v })}
                     />
-                  )}
+                  </div>
                 </div>
 
                 <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
                   <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
-                    <Wand2 className="w-3.5 h-3.5 text-amber-300" />Bloom
+                    <Palette className="w-3.5 h-3.5 text-violet-300" />Hue &amp; temperature
                   </div>
                   <LightSlider
-                    label="Strength"
-                    value={shader.bloom}
-                    min={0}
-                    max={2}
-                    step={0.05}
-                    onChange={(v) => onShaderChange({ ...shader, bloom: v })}
+                    label="Hue"
+                    value={adjust.hue}
+                    min={-180}
+                    max={180}
+                    step={1}
+                    unit="°"
+                    onChange={(v) => onAdjustChange({ ...adjust, hue: v })}
                   />
                   <LightSlider
-                    label="Radius"
-                    value={shader.bloomRadius}
-                    min={0}
+                    label="Temperature"
+                    value={adjust.temperature}
+                    min={-1}
                     max={1}
                     step={0.01}
-                    onChange={(v) => onShaderChange({ ...shader, bloomRadius: v })}
-                  />
-                  <LightSlider
-                    label="Threshold"
-                    value={shader.bloomThreshold}
-                    min={0}
-                    max={3}
-                    step={0.05}
-                    onChange={(v) => onShaderChange({ ...shader, bloomThreshold: v })}
+                    onChange={(v) => onAdjustChange({ ...adjust, temperature: v })}
                   />
                 </div>
 
+                <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
+                  <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
+                    <Sun className="w-3.5 h-3.5 text-orange-300" />Exposure &amp; tone mapping
+                  </div>
+                  <LightSlider
+                    label="Exposure"
+                    value={adjust.exposure}
+                    min={0}
+                    max={2}
+                    step={0.01}
+                    percent
+                    onChange={(v) => onAdjustChange({ ...adjust, exposure: v })}
+                  />
+                  <div className="grid grid-cols-5 gap-1">
+                    {TONE_MAPPINGS.map((t) => (
+                      <button
+                        key={t.value}
+                        type="button"
+                        onClick={() => onAdjustChange({ ...adjust, toneMapping: t.value })}
+                        className={cn(
+                          'text-[9px] py-1 rounded border transition-colors',
+                          adjust.toneMapping === t.value
+                            ? 'bg-violet-600/30 border-violet-500/50 text-violet-100'
+                            : 'bg-zinc-800/40 border-zinc-700/60 text-zinc-400 hover:bg-zinc-700/50 hover:text-zinc-200',
+                        )}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-zinc-500 leading-snug">
+                    Tone mapping is applied once after the 3D pass, so MToon colors are not
+                    double-mapped. Neutral keeps skin and clothing colors closest to the source.
+                  </p>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onAdjustChange({
+                    brightness: 1, saturation: 1, contrast: 1, hue: 0,
+                    temperature: 0, exposure: 1, toneMapping: 'neutral',
+                  })}
+                  className="w-full h-7 bg-zinc-800/60 border-zinc-700 hover:bg-zinc-700 hover:text-white text-zinc-200"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 mr-1.5" />Reset all to neutral (100%)
+                </Button>
+
                 <p className="text-[10px] text-zinc-500 leading-snug">
-                  Model presets inject into VRM MToon (bones/morphs intact). Outline uses MToon&apos;s
-                  native outline. Chromatic and Pixel are fullscreen. Bloom glows high-emissive parts.
-                  Keep threshold above 1 so white/highlights and the background don&apos;t glow.
+                  Color adjustments apply to the rendered avatar and are included in recordings.
                 </p>
               </div>
             </ScrollArea>
           </TabsContent>
+
         </Tabs>
       </CardContent>
     </Card>

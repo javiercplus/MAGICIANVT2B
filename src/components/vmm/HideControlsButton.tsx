@@ -17,8 +17,8 @@ export function HideControlsButton({ hidden, onToggle, className }: HideControls
     <button
       type="button"
       onClick={onToggle}
-      aria-label={hidden ? 'Show controls' : 'Hide controls'}
-      title={hidden ? 'Show controls' : 'Hide controls'}
+      aria-label={hidden ? 'Show options' : 'Hide options'}
+      title={hidden ? 'Show options (all controls)' : 'Hide options (all controls)'}
       className={cn(
         'flex items-center justify-center w-9 h-9 rounded-lg',
         'bg-zinc-900/80 border border-zinc-700 backdrop-blur-md',

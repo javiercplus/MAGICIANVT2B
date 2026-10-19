@@ -1,6 +1,8 @@
 // Ported from VMagicMirror v5.0.0 source (C# / Unity).
 // HeadIkIntegrator.cs, EyeLookAt.cs, AnimMorphEasedTarget.cs, VRMLoader.cs
 
+import type * as THREE from 'three';
+
 export const GAZE = {
   MOUSE_DIVISOR: 1000,
   // Web Y is inverted from Unity (top=0). Positive y = look down.
@@ -83,26 +85,105 @@ export const ZOOM = {
   WHEEL_SENSITIVITY: 0.001,
 } as const;
 
+// Camera lens controls, kept separate from zoom (which is a projection scale).
+export const CAMERA = {
+  FOV_MIN: 15,
+  FOV_MAX: 90,
+  FOV_DEFAULT: 30,
+  ROTATE_SENSITIVITY: 0.006,
+  PITCH_LIMIT_RAD: Math.PI / 6,
+} as const;
+
+export interface ModelRotation {
+  x: number; // pitch (radians)
+  y: number; // yaw (radians)
+}
+
+// Home framing captured when a VRM is loaded. Zoom dollies the camera along
+// this target ray; FOV only changes the lens angle.
+export interface CameraHome {
+  position: THREE.Vector3;
+  target: THREE.Vector3;
+}
+
+export const DEFAULT_MODEL_ROTATION: ModelRotation = { x: 0, y: 0 };
+
 export interface LightingConfig {
-  front: number; // front light intensity, 0..3
-  top: number;   // top light intensity, 0..3
+  front: number;      // front light intensity, 0..3
+  top: number;        // top light intensity, 0..3
+  frontAngle: number; // azimuth in degrees, 0 = straight in front, -/+ = orbit
+  topAngle: number;   // azimuth in degrees for the top light
 }
 
 export const DEFAULT_LIGHTING: LightingConfig = {
   front: 1.4,
   top: 1.0,
+  frontAngle: 0,
+  topAngle: 0,
 };
 
+export type ToneMappingMode = 'neutral' | 'aces' | 'agx' | 'linear' | 'none';
+
 export interface AdjustConfig {
-  brightness: number; // 0..2, 1 = neutral
-  saturation: number; // 0..2, 1 = neutral
-  contrast: number;   // 0..2, 1 = neutral
+  brightness: number;     // 0..2, 1 = neutral (100%)
+  saturation: number;     // 0..2, 1 = neutral (100%)
+  contrast: number;       // 0..2, 1 = neutral (100%)
+  hue: number;            // -180..180 degrees, 0 = neutral
+  temperature: number;    // -1..1, 0 = neutral (negative cool, positive warm)
+  exposure: number;       // 0..2, 1 = neutral (100%)
+  toneMapping: ToneMappingMode;
 }
 
+// Every color control defaults to its neutral 100% value.
 export const DEFAULT_ADJUST: AdjustConfig = {
   brightness: 1,
   saturation: 1,
   contrast: 1,
+  hue: 0,
+  temperature: 0,
+  exposure: 1,
+  toneMapping: 'neutral',
+};
+
+// === Wind ===================================================================
+// Drives the VRM spring bones (hair, skirt, ribbons) with a world-space breeze.
+export interface WindConfig {
+  enabled: boolean;
+  strength: number;  // 0..3
+  direction: number; // degrees, 0 = +X, 90 = +Z
+  gusts: number;     // 0..1 turbulence amount
+}
+
+export const DEFAULT_WIND: WindConfig = {
+  enabled: false,
+  strength: 0.6,
+  direction: 90,
+  gusts: 0.35,
+};
+
+// === MToon ==================================================================
+// Global look for all MToon materials. "enabled" applies the values below;
+// disabling restores the author's original material values.
+export interface MToonConfig {
+  enabled: boolean;
+  toony: number;        // shadingToonyFactor 0..1 (higher = harder toon steps)
+  shadingShift: number; // offset added to the authored shadingShiftFactor
+  gi: number;           // giEqualizationFactor 0..1 (1 = anime-like flat light)
+  rim: number;          // parametric rim strength 0..1
+  rimPower: number;     // rim fresnel power 1..8
+  rimColor: string;     // rim tint
+  colorBoost: number;   // saturation multiplier for lit/shade colors
+}
+
+export const DEFAULT_MTOON: MToonConfig = {
+  enabled: true,
+  toony: 0.9,
+  shadingShift: 0,
+  gi: 0.9,
+  rim: 0,
+  rimPower: 4,
+  rimColor: '#ffffff',
+  colorBoost: 1,
 };
 
 export const LIGHTING = {

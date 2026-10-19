@@ -10,7 +10,29 @@
     "db:push": "prisma db push --accept-data-loss",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:reset": "prisma migrate reset"
+    "db:reset": "prisma migrate reset",
+    "dev:electron": "concurrently \"npm run dev\" \"wait-on http://localhost:4000 && electron .\"",
+    "build:electron": "npm run build && electron-builder",
+    "build:electron:vulkan": "npm run build && electron-builder -c.extraMetadata.magicianGpu=vulkan -c.directories.output=dist-vulkan -c.productName=MagicianVT2B-Vulkan"
+  },
+  "build": {
+    "appId": "com.magicianvt2b.app",
+    "productName": "MagicianVT2B",
+    "directories": {
+      "output": "dist"
+    },
+    "afterPack": "scripts/afterPack.js",
+    "files": [
+      "out/**/*",
+      "main.js",
+      "preload.js"
+    ],
+    "linux": {
+      "target": "AppImage"
+    },
+    "win": {
+      "target": "nsis"
+    }
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

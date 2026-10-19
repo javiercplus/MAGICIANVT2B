@@ -13,6 +13,10 @@ export interface SavedConfig {
   adjust?: any; // AdjustConfig
   shader?: any; // ShaderConfig
   optimization?: any; // OptimizationConfig
+  mtoon?: any; // MToonConfig
+  wind?: any; // WindConfig
+  fov?: number;
+  orthographic?: boolean;
   zoom?: number;
 }
 

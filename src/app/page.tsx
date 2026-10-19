@@ -2,21 +2,25 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Loader2, Gauge } from 'lucide-react';
+import { Loader2, Gauge, Shirt } from 'lucide-react';
 import { VRMScene } from '@/components/vmm/VRMScene';
 import { ControlPanel } from '@/components/vmm/ControlPanel';
+import { AvatarPanel } from '@/components/vmm/AvatarPanel';
+import { DraggablePanel } from '@/components/vmm/DraggablePanel';
 import { OptimizationPanel } from '@/components/vmm/OptimizationPanel';
 import { Button } from '@/components/ui/button';
 import { Header } from '@/components/vmm/Header';
 import { DropZone } from '@/components/vmm/DropZone';
 import { HideControlsButton } from '@/components/vmm/HideControlsButton';
+import { WindowResizeHandles } from '@/components/vmm/WindowResizeHandles';
+import { WindowTitleBar } from '@/components/vmm/WindowTitleBar';
 import { HelpButton } from '@/components/vmm/HelpButton';
 import { useGazeTracking } from '@/hooks/useGazeTracking';
 import { useLipSync } from '@/hooks/useLipSync';
 import { useScreenRecording } from '@/hooks/useScreenRecording';
 import { useAvatarDrag } from '@/hooks/useAvatarDrag';
 import { cn } from '@/lib/utils';
-import { DEFAULT_LIGHTING, DEFAULT_ADJUST, DEFAULT_SHADER, DEFAULT_OPTIMIZATION, GREEN_SCREEN, ZOOM, type LightingConfig, type AdjustConfig, type ShaderConfig, type OptimizationConfig, type Telemetry } from '@/lib/vrm/constants';
+import { DEFAULT_LIGHTING, DEFAULT_ADJUST, DEFAULT_SHADER, DEFAULT_OPTIMIZATION, DEFAULT_WIND, DEFAULT_MTOON, CAMERA, GREEN_SCREEN, ZOOM, type LightingConfig, type AdjustConfig, type ShaderConfig, type OptimizationConfig, type Telemetry, type WindConfig, type MToonConfig, type CameraHome } from '@/lib/vrm/constants';
 import type { LoadVRMResult } from '@/lib/vrm/loadVRM';
 import { saveVrmToIndexedDB, loadVrmFromIndexedDB, saveConfig, loadConfig } from '@/lib/storage';
 
@@ -34,6 +38,7 @@ export default function Page() {
 
   const [gazeEnabled, setGazeEnabled] = useState(true);
   const [captureOutside, setCaptureOutside] = useState(false);
+  const [globalTracking, setGlobalTracking] = useState(false);
   const [micEnabled, setMicEnabled] = useState(false);
   const [autoBlinkEnabled, setAutoBlinkEnabled] = useState(true);
   const [randomEyesEnabled, setRandomEyesEnabled] = useState(false);
@@ -47,17 +52,23 @@ export default function Page() {
   const [adjust, setAdjust] = useState<AdjustConfig>(DEFAULT_ADJUST);
   const [shader, setShader] = useState<ShaderConfig>(DEFAULT_SHADER);
   const [optimization, setOptimization] = useState<OptimizationConfig>(DEFAULT_OPTIMIZATION);
+  const [mtoon, setMtoon] = useState<MToonConfig>(DEFAULT_MTOON);
+  const [wind, setWind] = useState<WindConfig>(DEFAULT_WIND);
+  const [fov, setFov] = useState<number>(CAMERA.FOV_DEFAULT);
+  const [orthographic, setOrthographic] = useState(false);
   const [telemetry, setTelemetry] = useState<Telemetry>({ fps: 0, textures: 0, calls: 0, geometries: 0 });
   const [optPanelOpen, setOptPanelOpen] = useState(false);
+  const [avatarPanelOpen, setAvatarPanelOpen] = useState(true);
   const [zoom, setZoom] = useState<number>(ZOOM.DEFAULT);
 
   const [isDragging, setIsDragging] = useState(false);
   const [controlsHidden, setControlsHidden] = useState(false);
 
-  const { desiredRef, currentRef } = useGazeTracking({ enabled: gazeEnabled, captureOutside });
+  const { desiredRef, currentRef } = useGazeTracking({ enabled: gazeEnabled, captureOutside, globalTracking });
   const { mouthValueRef, level, isReady: micReady, error: micError } = useLipSync(micEnabled);
   const { isRecording, durationSec: recordingSec, start: startRecording, stop: stopRecording, error: recordingError } = useScreenRecording();
-  const { offsetRef: avatarOffsetRef } = useAvatarDrag();
+  const { offsetRef: avatarOffsetRef, rotationRef, resetView } = useAvatarDrag();
+  const cameraHomeRef = useRef<CameraHome | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
@@ -82,6 +93,7 @@ export default function Page() {
     if (config) {
       if (config.gazeEnabled !== undefined) setGazeEnabled(config.gazeEnabled);
       if (config.captureOutside !== undefined) setCaptureOutside(config.captureOutside);
+      if (config.globalTracking !== undefined) setGlobalTracking(config.globalTracking);
       if (config.micEnabled !== undefined) setMicEnabled(config.micEnabled);
       if (config.autoBlinkEnabled !== undefined) setAutoBlinkEnabled(config.autoBlinkEnabled);
       if (config.randomEyesEnabled !== undefined) setRandomEyesEnabled(config.randomEyesEnabled);
@@ -92,14 +104,29 @@ export default function Page() {
       if (typeof config.chromaColor === 'string') setChromaColor(config.chromaColor);
       if (config.lighting !== undefined) {
         const l = config.lighting;
-        if (typeof l?.front === 'number' && typeof l?.top === 'number') {
-          setLighting({ front: l.front, top: l.top });
+        if (l && typeof l === 'object') {
+          setLighting({
+            ...DEFAULT_LIGHTING,
+            ...l,
+            front: typeof l.front === 'number' ? l.front : DEFAULT_LIGHTING.front,
+            top: typeof l.top === 'number' ? l.top : DEFAULT_LIGHTING.top,
+            frontAngle: typeof l.frontAngle === 'number' ? l.frontAngle : 0,
+            topAngle: typeof l.topAngle === 'number' ? l.topAngle : 0,
+          });
         }
       }
       if (config.adjust !== undefined) {
         const a = config.adjust;
-        if (typeof a?.brightness === 'number' && typeof a?.saturation === 'number' && typeof a?.contrast === 'number') {
-          setAdjust({ brightness: a.brightness, saturation: a.saturation, contrast: a.contrast });
+        if (a && typeof a === 'object') {
+          setAdjust({
+            ...DEFAULT_ADJUST,
+            ...a,
+            // Old configs only had brightness/saturation/contrast; keep any
+            // missing color controls neutral.
+            brightness: typeof a.brightness === 'number' ? a.brightness : 1,
+            saturation: typeof a.saturation === 'number' ? a.saturation : 1,
+            contrast: typeof a.contrast === 'number' ? a.contrast : 1,
+          });
         }
       }
       if (config.shader !== undefined) {
@@ -119,6 +146,24 @@ export default function Page() {
         if (o && typeof o === 'object') {
           setOptimization({ ...DEFAULT_OPTIMIZATION, ...o });
         }
+      }
+      if (config.mtoon !== undefined) {
+        const m = config.mtoon;
+        if (m && typeof m === 'object') {
+          setMtoon({ ...DEFAULT_MTOON, ...m });
+        }
+      }
+      if (config.wind !== undefined) {
+        const w = config.wind;
+        if (w && typeof w === 'object') {
+          setWind({ ...DEFAULT_WIND, ...w });
+        }
+      }
+      if (typeof config.fov === 'number') {
+        setFov(Math.min(Math.max(config.fov, CAMERA.FOV_MIN), CAMERA.FOV_MAX));
+      }
+      if (typeof config.orthographic === 'boolean') {
+        setOrthographic(config.orthographic);
       }
       if (typeof config.zoom === 'number') {
         setZoom(Math.min(Math.max(config.zoom, ZOOM.MIN), ZOOM.MAX));
@@ -235,9 +280,18 @@ export default function Page() {
     if (isRecording) stopRecording(); else startRecording();
   }, [isRecording, startRecording, stopRecording]);
 
+  const handleGlobalTrackingToggle = useCallback((v: boolean) => {
+    setGlobalTracking(v);
+    // Global tracking works everywhere, so pointer lock is redundant.
+    if (v && captureOutside) {
+      setCaptureOutside(false);
+      if (document.pointerLockElement) document.exitPointerLock();
+    }
+  }, [captureOutside]);
+
   const handleSaveConfig = useCallback(async () => {
     saveConfig({
-      gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, chromaColor, lighting, adjust, shader, optimization, zoom
+      gazeEnabled, captureOutside, globalTracking, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, chromaColor, lighting, adjust, shader, optimization, mtoon, wind, fov, orthographic, zoom
     });
     if (vrmUrl && vrmUrl !== DEFAULT_VRM_URL) {
       try {
@@ -248,7 +302,7 @@ export default function Page() {
         console.error('Failed to save VRM blob', e);
       }
     }
-  }, [gazeEnabled, captureOutside, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, chromaColor, lighting, adjust, shader, optimization, zoom, vrmUrl, vrmName]);
+  }, [gazeEnabled, captureOutside, globalTracking, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, chromaColor, lighting, adjust, shader, optimization, mtoon, wind, fov, orthographic, zoom, vrmUrl, vrmName]);
 
   const displayVrmName = meta?.name || vrmName;
   const headerStatus = vrmStatus === 'loaded'
@@ -259,7 +313,9 @@ export default function Page() {
   const effectiveVrmError = vrmError || recordingError;
 
   return (
-    <div className="flex flex-col min-h-screen bg-zinc-950 text-zinc-100">
+    <div className="relative flex flex-col min-h-screen bg-zinc-950 text-zinc-100">
+      <WindowResizeHandles />
+      <WindowTitleBar />
       <main className="relative flex-1 min-h-0">
         <div className="absolute inset-0">
           <VRMScene
@@ -268,12 +324,18 @@ export default function Page() {
             idleSwayEnabled={idleSwayEnabled} idleSwayIntensity={idleSwayIntensity}
             gazeDesiredRef={desiredRef} gazeCurrentRef={currentRef}
             mouthValueRef={mouthValueRef} avatarOffsetRef={avatarOffsetRef}
+            rotationRef={rotationRef}
+            cameraHomeRef={cameraHomeRef}
             greenScreen={greenScreen} chromaColor={chromaColor} backgroundImageUrl={backgroundImageUrl}
             lighting={lighting}
             adjust={adjust}
             shader={shader}
             optimization={optimization}
+            mtoon={mtoon}
+            wind={wind}
             zoom={zoom}
+            fov={fov}
+            orthographic={orthographic}
             onZoomChange={setZoom}
             onTelemetry={optPanelOpen ? setTelemetry : undefined}
             onLoaded={handleLoaded} onError={handleError}
@@ -289,7 +351,7 @@ export default function Page() {
           </div>
         )}
 
-        {gazeEnabled && captureOutside && !document.pointerLockElement && (
+        {gazeEnabled && captureOutside && !globalTracking && !document.pointerLockElement && (
           <div className="absolute inset-0 z-10 flex items-end justify-center pb-24 pointer-events-none">
             <div className="bg-violet-900/80 border border-violet-500/50 text-violet-100 text-xs px-3 py-2 rounded-lg backdrop-blur-sm">
               Click the canvas to engage pointer lock · Press Esc to exit
@@ -298,24 +360,41 @@ export default function Page() {
         )}
 
         <div className="absolute top-4 right-4 z-50 flex flex-col gap-2">
-          <HelpButton />
+          <div className={cn('flex flex-col gap-2', controlsHidden && 'hidden')}>
+            <HelpButton />
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              onClick={() => setAvatarPanelOpen((v) => !v)}
+              title="VRM model (model, MToon, effects)"
+              className={cn(
+                'h-9 w-9 bg-zinc-900/85 border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800',
+                avatarPanelOpen && 'text-violet-300 border-violet-500/50',
+              )}
+            >
+              <Shirt className="w-4 h-4" />
+            </Button>
+          </div>
           <HideControlsButton
             hidden={controlsHidden}
             onToggle={() => setControlsHidden((v) => !v)}
           />
-          <Button
-            type="button"
-            size="icon"
-            variant="outline"
-            onClick={() => setOptPanelOpen((v) => !v)}
-            title="Optimization panel"
-            className={cn(
-              'h-9 w-9 bg-zinc-900/85 border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800',
-              optPanelOpen && 'text-violet-300 border-violet-500/50',
-            )}
-          >
-            <Gauge className="w-4 h-4" />
-          </Button>
+          <div className={cn('flex flex-col gap-2', controlsHidden && 'hidden')}>
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              onClick={() => setOptPanelOpen((v) => !v)}
+              title="Optimization panel"
+              className={cn(
+                'h-9 w-9 bg-zinc-900/85 border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800',
+                optPanelOpen && 'text-violet-300 border-violet-500/50',
+              )}
+            >
+              <Gauge className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
 
         {optPanelOpen && (
@@ -337,12 +416,30 @@ export default function Page() {
         </div>
 
         <div className={cn(
-          'absolute top-4 right-16 z-20 transition-all duration-300',
-          controlsHidden && 'opacity-0 pointer-events-none translate-x-4'
+          'absolute top-24 left-4 z-30 transition-all duration-300',
+          (!avatarPanelOpen || controlsHidden) && 'opacity-0 pointer-events-none'
         )}>
-          <ControlPanel
+          <DraggablePanel>
+            <AvatarPanel
+              vrmName={displayVrmName} vrmStatus={vrmStatus} vrmError={vrmError}
+              mtoon={mtoon} shader={shader}
+              onMtoonChange={setMtoon} onShaderChange={setShader}
+              wind={wind} onWindChange={setWind}
+              onPickFile={handlePickFile} onResetVRM={handleResetVRM}
+              onSaveConfig={handleSaveConfig}
+              onClose={() => setAvatarPanelOpen(false)}
+            />
+          </DraggablePanel>
+        </div>
+
+        <div className={cn(
+          'absolute top-4 right-16 z-20 transition-all duration-300',
+          controlsHidden && 'opacity-0 pointer-events-none'
+        )}>
+          <DraggablePanel>
+            <ControlPanel
             vrmName={displayVrmName} vrmStatus={vrmStatus} vrmError={effectiveVrmError}
-            gazeEnabled={gazeEnabled} captureOutside={captureOutside}
+            gazeEnabled={gazeEnabled} captureOutside={captureOutside} globalTracking={globalTracking}
             micEnabled={micEnabled} autoBlinkEnabled={autoBlinkEnabled}
             randomEyesEnabled={randomEyesEnabled} randomEyesIntensity={randomEyesIntensity}
             idleSwayEnabled={idleSwayEnabled} idleSwayIntensity={idleSwayIntensity}
@@ -351,9 +448,11 @@ export default function Page() {
             isRecording={isRecording} recordingSec={recordingSec}
             lighting={lighting}
             adjust={adjust}
-            shader={shader}
             zoom={zoom}
+            fov={fov}
+            orthographic={orthographic}
             onGazeToggle={setGazeEnabled} onCaptureOutsideToggle={setCaptureOutside}
+            onGlobalTrackingToggle={handleGlobalTrackingToggle}
             onMicToggle={setMicEnabled} onAutoBlinkToggle={setAutoBlinkEnabled}
             onRandomEyesToggle={setRandomEyesEnabled} onRandomEyesIntensityChange={setRandomEyesIntensity}
             onIdleSwayToggle={setIdleSwayEnabled} onIdleSwayIntensityChange={setIdleSwayIntensity}
@@ -361,13 +460,14 @@ export default function Page() {
             onChromaColorChange={setChromaColor}
             onLightingChange={setLighting}
             onAdjustChange={setAdjust}
-            onShaderChange={setShader}
             onZoomChange={setZoom}
-            onPickFile={handlePickFile} onResetVRM={handleResetVRM}
+            onFovChange={setFov}
+            onOrthographicToggle={setOrthographic}
+            onResetView={resetView}
             onPickBackground={handlePickBackground} onClearBackground={handleClearBackground}
             onRecordToggle={handleRecordToggle}
-            onSaveConfig={handleSaveConfig}
           />
+          </DraggablePanel>
         </div>
 
         {isDragging && (
