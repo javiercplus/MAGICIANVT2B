@@ -81,8 +81,10 @@ export function useGazeTracking(options: UseGazeTrackingOptions) {
     const onPointerLockChange = () => {
       if (!document.pointerLockElement) virtualMouseRef.current = { x: 0, y: 0 };
     };
-    const onCanvasClick = () => {
+    const onCanvasClick = (e: MouseEvent) => {
       if (!enabled || useGlobal || !captureOutside || document.pointerLockElement) return;
+      // Ctrl + left drag rotates the model; never engage pointer lock then.
+      if (e.ctrlKey) return;
       const canvas = document.querySelector('canvas');
       (canvas as HTMLElement | null)?.requestPointerLock?.();
     };

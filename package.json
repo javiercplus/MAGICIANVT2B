@@ -22,6 +22,7 @@
     "directories": {
       "output": "dist"
     },
+    "afterPack": "scripts/afterPack.js",
     "files": [
       "out/**/*",
       "main.js",

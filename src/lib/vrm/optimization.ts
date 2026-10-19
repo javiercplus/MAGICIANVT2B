@@ -31,6 +31,8 @@ function makeLowPowerMaterial(source: THREE.Material): THREE.MeshLambertMaterial
     alphaTest: src.alphaTest,
     side: src.side,
     vertexColors: src.vertexColors ?? false,
+    // Tone mapping is done once by PostFX's OutputPass.
+    toneMapped: false,
   });
 }
 

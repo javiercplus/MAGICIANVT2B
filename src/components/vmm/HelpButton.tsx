@@ -1,19 +1,39 @@
 'use client';
 
-import { HelpCircle, MousePointer2, Move, ZoomIn, Upload, CircleDot, Sun, SlidersHorizontal } from 'lucide-react';
+import { HelpCircle, MousePointer2, Move, ZoomIn, Upload, CircleDot, Sun, SlidersHorizontal, Rotate3d, Wind, Camera } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 
 const ITEMS: { icon: React.ReactNode; title: string; description: string }[] = [
   {
     icon: <Move className="w-4 h-4" />,
+    title: 'Move panels',
+    description: 'Drag the VRM model and Options panels by their background or header to reposition them.',
+  },
+  {
+    icon: <Move className="w-4 h-4" />,
     title: 'Move avatar',
     description: 'Middle-click drag on the canvas to reposition the avatar.',
   },
   {
+    icon: <Rotate3d className="w-4 h-4" />,
+    title: 'Rotate model',
+    description: 'Hold Ctrl and left-drag over the canvas to rotate the avatar. Use Reset view in the Camera tab to return to the front.',
+  },
+  {
     icon: <ZoomIn className="w-4 h-4" />,
     title: 'Zoom',
-    description: 'Scroll the mouse wheel over the canvas, or use the Zoom slider in the Scene tab.',
+    description: 'Scroll the mouse wheel over the canvas, or use the separate Zoom slider in the Camera tab.',
+  },
+  {
+    icon: <Camera className="w-4 h-4" />,
+    title: 'Camera',
+    description: 'Camera tab: zoom dollies the camera, while field of view changes the lens angle. Orthographic projection is also available.',
+  },
+  {
+    icon: <Wind className="w-4 h-4" />,
+    title: 'Wind',
+    description: 'VRM model → Wind tab: breeze on hair, skirt and ribbons. Strength, direction and gusts are adjustable.',
   },
   {
     icon: <MousePointer2 className="w-4 h-4" />,
@@ -23,7 +43,7 @@ const ITEMS: { icon: React.ReactNode; title: string; description: string }[] = [
   {
     icon: <Upload className="w-4 h-4" />,
     title: 'Load an avatar',
-    description: 'Drag & drop a .vrm file anywhere, or use Open .vrm in the Avatar tab.',
+    description: 'Drag & drop a .vrm file anywhere, or open VRM model (shirt button, top right) and use Open .vrm.',
   },
   {
     icon: <CircleDot className="w-4 h-4" />,
@@ -33,12 +53,12 @@ const ITEMS: { icon: React.ReactNode; title: string; description: string }[] = [
   {
     icon: <Sun className="w-4 h-4" />,
     title: 'Light',
-    description: 'Adjust the front and top light intensity.',
+    description: 'Adjust front/top intensity and orbit each light with its Direction control.',
   },
   {
     icon: <SlidersHorizontal className="w-4 h-4" />,
-    title: 'Adjust',
-    description: 'Fine-tune brightness, saturation and contrast of the render.',
+    title: 'Color',
+    description: 'Brightness, saturation, contrast, hue, temperature and tone mapping. 100% is neutral.',
   },
 ];
 

@@ -15,9 +15,11 @@ import {
   isVRM0,
 } from '@/lib/vrm/gazeMath';
 import { GAZE, LIPSYNC, AUTO_BLINK, SCENE, PHYSICS_INTERVAL } from '@/lib/vrm/constants';
-import type { GazeTarget, ShaderConfig, OptimizationConfig } from '@/lib/vrm/constants';
+import type { GazeTarget, ShaderConfig, OptimizationConfig, MToonConfig, ModelRotation, WindConfig, CameraHome } from '@/lib/vrm/constants';
 import { createVRMFXUniforms, applyVRMMaterialFX, updateVRMFX, updateVRMOutline } from '@/lib/vrm/materialFX';
 import { applyLowPowerMaterials, updateVRMSelective } from '@/lib/vrm/optimization';
+import { applyMToonLook, prepareSceneMaterials } from '@/lib/vrm/mtoon';
+import { applyVRMWind } from '@/lib/vrm/wind';
 
 interface VRMAvatarProps {
   vrmUrl: string | null;
@@ -29,6 +31,10 @@ interface VRMAvatarProps {
   idleSwayIntensity: number;
   shaderConfig: ShaderConfig;
   optimization: OptimizationConfig;
+  mtoon: MToonConfig;
+  wind: WindConfig;
+  rotationRef: React.RefObject<ModelRotation>;
+  cameraHomeRef: React.RefObject<CameraHome | null>;
   gazeDesiredRef: React.RefObject<GazeTarget>;
   gazeCurrentRef: React.RefObject<GazeTarget>;
   mouthValueRef: React.RefObject<number>;
@@ -40,24 +46,25 @@ interface VRMAvatarProps {
 export function VRMAvatar(props: VRMAvatarProps) {
   const {
     vrmUrl, gazeEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity,
-    shaderConfig, optimization,
+    shaderConfig, optimization, mtoon, wind, rotationRef, cameraHomeRef,
     gazeDesiredRef, gazeCurrentRef, mouthValueRef, avatarOffsetRef,
     onLoaded, onError,
   } = props;
 
   const [scene, setScene] = useState<THREE.Group | null>(null);
+  const groupRef = useRef<THREE.Group>(null);
   const fxUniforms = useRef(createVRMFXUniforms());
   const vrmRef = useRef<VRM | null>(null);
   const lastMouthRef = useRef(0);
   const lastBlinkRef = useRef(0);
   const vrm0Ref = useRef(false);
   const physicsAccRef = useRef(0);
-  const headBoneRef = useRef<THREE.Bone | null>(null);
-  const neckBoneRef = useRef<THREE.Bone | null>(null);
-  const leftEyeBoneRef = useRef<THREE.Bone | null>(null);
-  const rightEyeBoneRef = useRef<THREE.Bone | null>(null);
-  const hipsBoneRef = useRef<THREE.Bone | null>(null);
-  const spineBoneRef = useRef<THREE.Bone | null>(null);
+  const headBoneRef = useRef<THREE.Object3D | null>(null);
+  const neckBoneRef = useRef<THREE.Object3D | null>(null);
+  const leftEyeBoneRef = useRef<THREE.Object3D | null>(null);
+  const rightEyeBoneRef = useRef<THREE.Object3D | null>(null);
+  const hipsBoneRef = useRef<THREE.Object3D | null>(null);
+  const spineBoneRef = useRef<THREE.Object3D | null>(null);
   const blinkStateRef = useRef({
     elapsed: 0,
     nextDelay: randomNextBlinkDelay(),
@@ -69,10 +76,15 @@ export function VRMAvatar(props: VRMAvatarProps) {
   });
 
   const { camera } = useThree();
+  const cameraRef = useRef(camera);
+  useEffect(() => {
+    cameraRef.current = camera;
+  }, [camera]);
 
   useEffect(() => {
     if (!vrmUrl) {
       vrmRef.current = null;
+      cameraHomeRef.current = null;
       vrm0Ref.current = false;
       headBoneRef.current = null;
       neckBoneRef.current = null;
@@ -97,6 +109,11 @@ export function VRMAvatar(props: VRMAvatarProps) {
         spineBoneRef.current = vrm.humanoid?.getNormalizedBoneNode('spine') ?? null;
         applyStandPose(vrm);
         vrm0Ref.current = isVRM0(vrm);
+        // Post-processing tone maps once (OutputPass). Materials must not do it
+        // again or colors get washed out; MToon also gets its color textures
+        // flagged as sRGB here.
+        prepareSceneMaterials(vrm.scene);
+        applyMToonLook(vrm, mtoon);
         applyVRMMaterialFX(vrm, fxUniforms.current);
 
         vrmScene.updateMatrixWorld(true);
@@ -104,9 +121,12 @@ export function VRMAvatar(props: VRMAvatarProps) {
         if (head) {
           const headWorldPos = new THREE.Vector3();
           head.getWorldPosition(headWorldPos);
-          camera.position.set(0, headWorldPos.y - 0.05, headWorldPos.z + SCENE.CAMERA_DISTANCE);
-          camera.lookAt(0, headWorldPos.y - 0.15, headWorldPos.z);
-          camera.updateProjectionMatrix();
+          const activeCamera = cameraRef.current;
+          const target = new THREE.Vector3(0, headWorldPos.y - 0.15, headWorldPos.z);
+          activeCamera.position.set(0, headWorldPos.y - 0.05, headWorldPos.z + SCENE.CAMERA_DISTANCE);
+          activeCamera.lookAt(target);
+          activeCamera.updateProjectionMatrix();
+          cameraHomeRef.current = { position: activeCamera.position.clone(), target };
         }
         setScene(vrmScene);
         onLoaded?.(result);
@@ -137,15 +157,29 @@ export function VRMAvatar(props: VRMAvatarProps) {
     applyLowPowerMaterials(vrm, optimization.mtoonLowPower);
   }, [scene, optimization.mtoonLowPower]);
 
+  // MToon look overrides (toon steps, GI, rim, color boost) apply live.
+  useEffect(() => {
+    const vrm = vrmRef.current;
+    if (!vrm || !scene) return;
+    prepareSceneMaterials(vrm.scene);
+    applyMToonLook(vrm, mtoon);
+  }, [scene, mtoon]);
+
   useFrame((state, delta) => {
     const vrm = vrmRef.current;
     if (!vrm) return;
     const dt = Math.min(delta, 1 / 30);
 
-    const offset = avatarOffsetRef.current;
-    if (offset && scene) {
-      scene.position.set(offset.x, offset.y, offset.z);
+    const group = groupRef.current;
+    if (group) {
+      const offset = avatarOffsetRef.current;
+      if (offset) group.position.set(offset.x, offset.y, offset.z);
+      const rotation = rotationRef.current;
+      if (rotation) group.rotation.set(rotation.x, rotation.y, 0);
     }
+
+    // Wind affects the spring bones; apply before vrm.update().
+    applyVRMWind(vrm, wind, state.clock.elapsedTime);
 
     let desired: GazeTarget;
     if (randomEyesEnabled) {
@@ -260,5 +294,9 @@ export function VRMAvatar(props: VRMAvatarProps) {
     updateVRMOutline(vrm, shaderConfig);
   });
 
-  return scene ? <primitive object={scene} /> : null;
+  return scene ? (
+    <group ref={groupRef}>
+      <primitive object={scene} />
+    </group>
+  ) : null;
 }
