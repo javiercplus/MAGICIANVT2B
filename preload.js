@@ -8,4 +8,7 @@ window.electronAPI = {
     ipcRenderer.on('gaze:cursor', listener);
     return () => ipcRenderer.removeListener('gaze:cursor', listener);
   },
+  // VMC protocol: send pre-encoded OSC datagrams to the main process.
+  vmcSetEnabled: (enabled) => ipcRenderer.send('vmc:set-enabled', !!enabled),
+  vmcSend: (buffer) => ipcRenderer.send('vmc:send', buffer),
 };

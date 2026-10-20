@@ -20,6 +20,7 @@ import { createVRMFXUniforms, applyVRMMaterialFX, updateVRMFX, updateVRMOutline 
 import { applyLowPowerMaterials, updateVRMSelective } from '@/lib/vrm/optimization';
 import { applyMToonLook, prepareSceneMaterials } from '@/lib/vrm/mtoon';
 import { applyVRMWind } from '@/lib/vrm/wind';
+import { vmcState } from '@/lib/vmc/vmc';
 
 interface VRMAvatarProps {
   vrmUrl: string | null;
@@ -310,6 +311,27 @@ export function VRMAvatar(props: VRMAvatarProps) {
     });
     updateVRMFX(fxUniforms.current, shaderConfig, state.clock.elapsedTime);
     updateVRMOutline(vrm, shaderConfig);
+
+    // Publish head transform + expression weights for the VMC sender.
+    const headNode = headBoneRef.current;
+    if (headNode) {
+      headNode.updateWorldMatrix(true, false);
+      const p = new THREE.Vector3();
+      const q = new THREE.Quaternion();
+      headNode.getWorldPosition(p);
+      headNode.getWorldQuaternion(q);
+      vmcState.head.px = p.x;
+      vmcState.head.py = p.y;
+      vmcState.head.pz = p.z;
+      vmcState.head.qx = q.x;
+      vmcState.head.qy = q.y;
+      vmcState.head.qz = q.z;
+      vmcState.head.qw = q.w;
+    }
+    const bs: Record<string, number> = {};
+    const expressions = vrm.expressionManager?.expressions ?? [];
+    for (const e of expressions) bs[e.expressionName] = e.weight;
+    vmcState.blendshapes = bs;
   });
 
   return scene ? (

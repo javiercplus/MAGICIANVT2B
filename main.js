@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const dgram = require('dgram');
 const { spawn } = require('child_process');
 const { pathToFileURL } = require('url');
 
@@ -252,7 +253,41 @@ function setupGlobalCursor() {
       const pos = readGlobalCursor(sender);
       if (pos) sender.send('gaze:cursor', pos);
     }, 16);
-    timers.set(sender.id, timer);
+     timers.set(sender.id, timer);
+  });
+}
+
+// === VMC Protocol (OSC over UDP) ============================================
+// The renderer never opens sockets; it sends the already-encoded OSC datagrams
+// here and this process forwards them to VTube Studio over UDP.
+const VMC_HOST = '127.0.0.1';
+const VMC_PORT = 39540;
+
+function decodeOscAddress(buf) {
+  let addr = '';
+  for (let i = 0; i < buf.length; i++) {
+    const c = buf[i];
+    if (c === 0) break;
+    addr += String.fromCharCode(c);
+  }
+  return addr;
+}
+
+function setupVmc() {
+  const socket = dgram.createSocket('udp4');
+  let enabled = false;
+  const debug = process.env.DEBUG_VMC === '1';
+
+  ipcMain.on('vmc:set-enabled', (_event, value) => {
+    enabled = !!value;
+    if (debug) console.log(`[VMC] ${enabled ? 'enabled' : 'disabled'}`);
+  });
+
+  ipcMain.on('vmc:send', (_event, buffer) => {
+    if (!enabled) return;
+    const buf = Buffer.from(buffer);
+    socket.send(buf, 0, buf.length, VMC_PORT, VMC_HOST);
+    if (debug) console.log(`[VMC] -> ${decodeOscAddress(buf)} (${buf.length} bytes)`);
   });
 }
 
@@ -325,6 +360,7 @@ if (!relaunchedOnX11) {
     registerAppProtocol();
     setupWindowResizing();
     setupGlobalCursor();
+    setupVmc();
     createWindow();
 
     app.on('activate', () => {

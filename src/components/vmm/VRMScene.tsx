@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { VRMAvatar } from './VRMAvatar';
 import { PostFX } from './PostFX';
 import { RenderSettings, TelemetryProbe } from './TelemetryProbe';
+import { buildVmcPackets, vmcState } from '@/lib/vmc/vmc';
 import {
   SCENE, ZOOM, CAMERA, GREEN_SCREEN, LIGHTING,
   type LightingConfig, type AdjustConfig, type ShaderConfig, type OptimizationConfig, type Telemetry,
@@ -47,6 +48,7 @@ interface VRMSceneProps {
   zoom: number;
   fov: number;
   orthographic: boolean;
+  vmcEnabled: boolean;
   onZoomChange?: (z: number) => void;
   onTelemetry?: (t: Telemetry) => void;
   onLoaded?: (result: LoadVRMResult) => void;
@@ -247,13 +249,38 @@ function RendererColorSettings({ adjust }: { adjust: AdjustConfig }) {
   return null;
 }
 
+// Sends VMC protocol packets (head transform + blendshapes) to the main process
+// at ~30Hz while enabled. The main process forwards them over UDP to VTS.
+function VmcSender({ enabled }: { enabled: boolean }) {
+  const lastSend = useRef(0);
+
+  useEffect(() => {
+    const api = (window as unknown as { electronAPI?: { vmcSetEnabled?: (e: boolean) => void } }).electronAPI;
+    api?.vmcSetEnabled?.(enabled);
+  }, [enabled]);
+
+  useFrame(() => {
+    if (!enabled) return;
+    const now = performance.now();
+    if (now - lastSend.current < 1000 / 30) return;
+    lastSend.current = now;
+    const api = (window as unknown as { electronAPI?: { vmcSend?: (b: Uint8Array) => void } }).electronAPI;
+    if (!api?.vmcSend) return;
+    const { head, blendshapes } = buildVmcPackets(vmcState);
+    api.vmcSend(head);
+    for (const b of blendshapes) api.vmcSend(b);
+  }, 3);
+
+  return null;
+}
+
 export function VRMScene(props: VRMSceneProps) {
   const {
     vrmUrl, gazeEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity,
     gazeDesiredRef, gazeCurrentRef, mouthValueRef, avatarOffsetRef, faceWeights, rotationRef, cameraHomeRef,
     greenScreen = false, chromaColor = GREEN_SCREEN.COLOR, backgroundImageUrl = null,
     lighting, adjust, shader, optimization, mtoon, wind,
-    zoom, fov, orthographic, onZoomChange,
+    zoom, fov, orthographic, vmcEnabled, onZoomChange,
     onTelemetry, onLoaded, onError,
   } = props;
 
@@ -328,6 +355,7 @@ export function VRMScene(props: VRMSceneProps) {
       <RendererColorSettings adjust={adjust} />
       <RenderSettings pixelRatio={optimization.pixelRatio} />
       <TelemetryProbe intervalMs={500} onSample={onTelemetry ?? (() => {})} />
+      <VmcSender enabled={vmcEnabled} />
 
       <CameraRig zoom={zoom} fov={fov} orthographic={orthographic} cameraHomeRef={cameraHomeRef} onZoomChange={onZoomChange} />
     </Canvas>

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Loader2, Gauge, Shirt } from 'lucide-react';
+import { Loader2, Gauge, Shirt, Radio } from 'lucide-react';
 import { VRMScene } from '@/components/vmm/VRMScene';
 import { ControlPanel } from '@/components/vmm/ControlPanel';
 import { AvatarPanel } from '@/components/vmm/AvatarPanel';
@@ -79,6 +79,7 @@ export default function Page() {
   const [telemetry, setTelemetry] = useState<Telemetry>({ fps: 0, textures: 0, calls: 0, geometries: 0 });
   const [optPanelOpen, setOptPanelOpen] = useState(false);
   const [avatarPanelOpen, setAvatarPanelOpen] = useState(true);
+  const [vmcEnabled, setVmcEnabled] = useState(false);
   const [zoom, setZoom] = useState<number>(ZOOM.DEFAULT);
 
   const [isDragging, setIsDragging] = useState(false);
@@ -393,6 +394,7 @@ export default function Page() {
             zoom={zoom}
             fov={fov}
             orthographic={orthographic}
+            vmcEnabled={vmcEnabled}
             onZoomChange={setZoom}
             onTelemetry={optPanelOpen ? setTelemetry : undefined}
             onLoaded={handleLoaded} onError={handleError}
@@ -431,6 +433,19 @@ export default function Page() {
               )}
             >
               <Shirt className="w-4 h-4" />
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              onClick={() => setVmcEnabled((v) => !v)}
+              title="VMC output (send tracking to VTube Studio via UDP)"
+              className={cn(
+                'h-9 w-9 bg-zinc-900/85 border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800',
+                vmcEnabled && 'text-emerald-300 border-emerald-500/50',
+              )}
+            >
+              <Radio className="w-4 h-4" />
             </Button>
           </div>
           <HideControlsButton
