@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  Upload, RotateCcw, Save, AlertCircle, Sparkles, Wand2, Dna, X, Shirt, Wind,
+  Upload, RotateCcw, Save, AlertCircle, Sparkles, Wand2, Dna, X, Shirt, Wind, Smile,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,8 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { LightSlider, StatusPill, type VrmStatus } from './controls';
 import {
-  DEFAULT_MTOON, DEFAULT_WIND,
-  type MToonConfig, type ShaderConfig, type ShaderPreset, type WindConfig,
+  DEFAULT_MTOON, DEFAULT_WIND, FACE_EMOTIONS, matchFaceEmotion,
+  type MToonConfig, type ShaderConfig, type ShaderPreset, type WindConfig, type FacePreset,
 } from '@/lib/vrm/constants';
 
 const SHADER_PRESETS: { value: ShaderPreset; label: string }[] = [
@@ -26,6 +26,16 @@ const SHADER_PRESETS: { value: ShaderPreset; label: string }[] = [
   { value: 'pixel', label: 'Pixel' },
 ];
 
+const FACE_PRESET_BUTTONS: { value: FacePreset; label: string }[] = [
+  { value: 'neutral', label: 'All neutral' },
+  { value: 'fun', label: 'All fun' },
+  { value: 'happy', label: 'Happy' },
+  { value: 'relaxed', label: 'Relaxed' },
+  { value: 'surprised', label: 'Surprised' },
+  { value: 'sad', label: 'Sad' },
+  { value: 'angry', label: 'Angry' },
+];
+
 interface AvatarPanelProps {
   vrmName: string;
   vrmStatus: VrmStatus;
@@ -33,9 +43,13 @@ interface AvatarPanelProps {
   mtoon: MToonConfig;
   shader: ShaderConfig;
   wind: WindConfig;
+  expressionNames: string[];
+  faceWeights: Record<string, number>;
   onMtoonChange: (m: MToonConfig) => void;
   onShaderChange: (s: ShaderConfig) => void;
   onWindChange: (w: WindConfig) => void;
+  onFaceWeightChange: (name: string, value: number) => void;
+  onFacePreset: (preset: FacePreset) => void;
   onPickFile: () => void;
   onResetVRM: () => void;
   onSaveConfig: () => void;
@@ -44,8 +58,18 @@ interface AvatarPanelProps {
 
 export function AvatarPanel({
   vrmName, vrmStatus, vrmError, mtoon, shader, wind,
+  expressionNames, faceWeights,
   onMtoonChange, onShaderChange, onWindChange, onPickFile, onResetVRM, onSaveConfig, onClose,
+  onFaceWeightChange, onFacePreset,
 }: AvatarPanelProps) {
+  const sortedExpressions = [...expressionNames].sort((a, b) => {
+    const ea = matchFaceEmotion(a);
+    const eb = matchFaceEmotion(b);
+    const ia = ea ? FACE_EMOTIONS.indexOf(ea) : FACE_EMOTIONS.length;
+    const ib = eb ? FACE_EMOTIONS.indexOf(eb) : FACE_EMOTIONS.length;
+    return ia - ib || a.localeCompare(b);
+  });
+
   return (
     <Card className={cn(
       'w-[430px] max-w-[calc(100vw-2rem)] bg-zinc-900/90 border-zinc-800',
@@ -84,10 +108,11 @@ export function AvatarPanel({
 
       <CardContent className="p-3 pt-0">
         <Tabs defaultValue="avatar" className="w-full">
-          <TabsList className="grid w-full grid-cols-4 bg-zinc-800/60 h-8">
+          <TabsList className="grid w-full grid-cols-5 bg-zinc-800/60 h-8">
             <TabsTrigger value="avatar" className="text-[9px] uppercase tracking-wider">Model</TabsTrigger>
             <TabsTrigger value="mtoon" className="text-[9px] uppercase tracking-wider">MToon</TabsTrigger>
             <TabsTrigger value="effects" className="text-[9px] uppercase tracking-wider">Effects</TabsTrigger>
+            <TabsTrigger value="face" className="text-[9px] uppercase tracking-wider">Face</TabsTrigger>
             <TabsTrigger value="wind" className="text-[9px] uppercase tracking-wider">Wind</TabsTrigger>
           </TabsList>
 
@@ -237,20 +262,30 @@ export function AvatarPanel({
             <ScrollArea className="max-h-[380px]">
               <div className="space-y-2 pr-1">
                 <div className="space-y-1.5">
-                  <span className="text-[10px] uppercase tracking-wider text-zinc-500">Preset</span>
+                  <span className="text-[10px] uppercase tracking-wider text-zinc-500">Effects (multi)</span>
                   <div className="grid grid-cols-3 gap-1.5">
                     {SHADER_PRESETS.map((p) => (
                       <button
                         key={p.value}
                         type="button"
-                        onClick={() => onShaderChange({
-                          ...shader,
-                          preset: p.value,
-                          intensity: p.value === 'off' ? shader.intensity : Math.max(shader.intensity, 0.05),
-                        })}
+                        onClick={() => {
+                          if (p.value === 'off') {
+                            onShaderChange({ ...shader, effects: [] });
+                            return;
+                          }
+                          const isActive = shader.effects.includes(p.value);
+                          const effects = isActive
+                            ? shader.effects.filter((e) => e !== p.value)
+                            : [...shader.effects, p.value];
+                          onShaderChange({
+                            ...shader,
+                            effects,
+                            intensity: Math.max(shader.intensity, 0.05),
+                          });
+                        }}
                         className={cn(
                           'text-[10px] py-1.5 rounded-md border transition-colors',
-                          shader.preset === p.value
+                          (p.value === 'off' ? shader.effects.length === 0 : shader.effects.includes(p.value))
                             ? 'bg-violet-600/30 border-violet-500/50 text-violet-100'
                             : 'bg-zinc-800/40 border-zinc-700/60 text-zinc-400 hover:bg-zinc-700/50 hover:text-zinc-200',
                         )}
@@ -259,6 +294,9 @@ export function AvatarPanel({
                       </button>
                     ))}
                   </div>
+                  <p className="text-[10px] text-zinc-500 leading-snug">
+                    Tap several effects to combine them. Off clears all.
+                  </p>
                 </div>
 
                 <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
@@ -275,14 +313,14 @@ export function AvatarPanel({
                     />
                   </div>
                   <LightSlider
-                    label={shader.preset === 'outline' ? 'Outline width' : 'Intensity'}
+                    label={shader.effects.length === 1 && shader.effects.includes('outline') ? 'Outline width' : 'Intensity'}
                     value={shader.intensity}
                     min={0}
                     max={1}
                     step={0.05}
                     onChange={(v) => onShaderChange({ ...shader, intensity: v })}
                   />
-                  {(shader.preset === 'hologram' || shader.preset === 'scanline') && (
+                  {(shader.effects.includes('hologram') || shader.effects.includes('scanline')) && (
                     <LightSlider
                       label="Scanline density"
                       value={shader.scanline}
@@ -292,7 +330,7 @@ export function AvatarPanel({
                       onChange={(v) => onShaderChange({ ...shader, scanline: v })}
                     />
                   )}
-                  {shader.preset === 'dissolve' && (
+                  {shader.effects.includes('dissolve') && (
                     <LightSlider
                       label="Dissolve"
                       value={shader.dissolve}
@@ -398,6 +436,51 @@ export function AvatarPanel({
                     <RotateCcw className="w-3.5 h-3.5 mr-1.5" />Reset wind
                   </Button>
                 </div>
+              </div>
+            </ScrollArea>
+          </TabsContent>
+
+          <TabsContent value="face" className="mt-3 space-y-2">
+            <ScrollArea className="max-h-[380px]">
+              <div className="space-y-2 pr-1">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-zinc-500">
+                    <Smile className="w-3 h-3" />Blend shapes
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {FACE_PRESET_BUTTONS.map((p) => (
+                      <button
+                        key={p.value}
+                        type="button"
+                        onClick={() => onFacePreset(p.value)}
+                        className="text-[10px] py-1.5 rounded-md border bg-zinc-800/40 border-zinc-700/60 text-zinc-400 hover:bg-zinc-700/50 hover:text-zinc-200 transition-colors"
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {sortedExpressions.length === 0 ? (
+                  <p className="text-[11px] text-zinc-500 leading-snug rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
+                    Load a VRM model to list its expressions.
+                  </p>
+                ) : (
+                  <div className="space-y-2.5 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
+                    {sortedExpressions.map((name) => (
+                      <LightSlider
+                        key={name}
+                        label={name.charAt(0).toUpperCase() + name.slice(1)}
+                        value={faceWeights[name] ?? 0}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        percent
+                        onChange={(v) => onFaceWeightChange(name, v)}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             </ScrollArea>
           </TabsContent>
