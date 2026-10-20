@@ -245,7 +245,7 @@ export type ShaderPreset =
   | 'outline' | 'chromatic' | 'pixel';
 
 export interface ShaderConfig {
-  preset: ShaderPreset;
+  effects: ShaderPreset[]; // enabled effects (multi-select); empty = off
   intensity: number;   // 0..1 master mix
   color: string;       // tint / glow color (hex)
   dissolve: number;    // 0..1 (dissolve preset)
@@ -256,7 +256,7 @@ export interface ShaderConfig {
 }
 
 export const DEFAULT_SHADER: ShaderConfig = {
-  preset: 'off',
+  effects: [],
   intensity: 0.5,
   color: '#38f0ff',
   dissolve: 0,
@@ -265,3 +265,29 @@ export const DEFAULT_SHADER: ShaderConfig = {
   bloomRadius: 0.4,
   bloomThreshold: 1.1,
 };
+
+// === Face / blend shapes =====================================================
+
+export type FacePreset =
+  | 'neutral' | 'fun' | 'happy' | 'sad' | 'angry' | 'surprised' | 'relaxed';
+
+// Only emotion/state blend shapes are exposed in the Face tab. Mouth vowels
+// (aa/ih/ou/ee/oh), blink and look-at channels are deliberately excluded: they
+// are driven by lipsync, auto-blink and gaze.
+export const FACE_EMOTIONS: readonly FacePreset[] = [
+  'neutral', 'fun', 'happy', 'relaxed', 'surprised', 'sad', 'angry',
+];
+
+// Map a VRM expression name to an emotion/state. Handles standard preset names
+// as well as custom "face control" states such as "Fcl_ALL_Neutral", "FC_Happy".
+export function matchFaceEmotion(name: string): FacePreset | null {
+  const n = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (n.includes('allneutral') || n.includes('neutral')) return 'neutral';
+  if (n.includes('allfun') || n.includes('fun')) return 'fun';
+  if (n.includes('happy')) return 'happy';
+  if (n.includes('relaxed')) return 'relaxed';
+  if (n.includes('surprised') || n.includes('surprise')) return 'surprised';
+  if (n.includes('sad')) return 'sad';
+  if (n.includes('angry') || n.includes('anger')) return 'angry';
+  return null;
+}

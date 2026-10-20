@@ -161,9 +161,9 @@ export function PostFX({
     // Color grading and full-screen stylization run in display space.
     const stylize = new ShaderPass(StylizeShader);
     stylize.uniforms.uChromatic.value =
-      shader.preset === 'chromatic' ? shader.intensity * 0.03 : 0;
+      shader.effects.includes('chromatic') ? shader.intensity * 0.03 : 0;
     stylize.uniforms.uPixel.value =
-      shader.preset === 'pixel' ? Math.round(1 + shader.intensity * 23) : 1;
+      shader.effects.includes('pixel') ? Math.round(1 + shader.intensity * 23) : 1;
     composer.addPass(stylize);
 
     const pass = new ShaderPass(AdjustmentShader);
@@ -243,10 +243,10 @@ export function PostFX({
     const stylize = stylizeRef.current;
     if (!stylize) return;
     stylize.uniforms.uChromatic.value =
-      shader.preset === 'chromatic' ? shader.intensity * 0.03 : 0;
+      shader.effects.includes('chromatic') ? shader.intensity * 0.03 : 0;
     stylize.uniforms.uPixel.value =
-      shader.preset === 'pixel' ? Math.round(1 + shader.intensity * 23) : 1;
-  }, [shader.preset, shader.intensity]);
+      shader.effects.includes('pixel') ? Math.round(1 + shader.intensity * 23) : 1;
+  }, [shader.effects, shader.intensity]);
 
   useEffect(() => {
     if (fxaaRef.current) fxaaRef.current.enabled = antiAlias;

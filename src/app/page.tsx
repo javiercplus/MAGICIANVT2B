@@ -20,7 +20,7 @@ import { useLipSync } from '@/hooks/useLipSync';
 import { useScreenRecording } from '@/hooks/useScreenRecording';
 import { useAvatarDrag } from '@/hooks/useAvatarDrag';
 import { cn } from '@/lib/utils';
-import { DEFAULT_LIGHTING, DEFAULT_ADJUST, DEFAULT_SHADER, DEFAULT_OPTIMIZATION, DEFAULT_WIND, DEFAULT_MTOON, CAMERA, GREEN_SCREEN, ZOOM, type LightingConfig, type AdjustConfig, type ShaderConfig, type OptimizationConfig, type Telemetry, type WindConfig, type MToonConfig, type CameraHome } from '@/lib/vrm/constants';
+import { DEFAULT_LIGHTING, DEFAULT_ADJUST, DEFAULT_SHADER, DEFAULT_OPTIMIZATION, DEFAULT_WIND, DEFAULT_MTOON, matchFaceEmotion, CAMERA, GREEN_SCREEN, ZOOM, type LightingConfig, type AdjustConfig, type ShaderConfig, type OptimizationConfig, type Telemetry, type WindConfig, type MToonConfig, type CameraHome, type FacePreset, type ShaderPreset } from '@/lib/vrm/constants';
 import type { LoadVRMResult } from '@/lib/vrm/loadVRM';
 import { saveVrmToIndexedDB, loadVrmFromIndexedDB, saveConfig, loadConfig } from '@/lib/storage';
 
@@ -28,6 +28,24 @@ type VrmStatus = 'idle' | 'loading' | 'loaded' | 'error';
 
 const DEFAULT_VRM_URL = '/models/default.vrm';
 const DEFAULT_VRM_NAME = 'VRM1 Constraint Twist Sample · Pixiv';
+
+// Pick the single expression that best represents an emotion/state. Prefers
+// custom face-control states ("ALL_*", "Fcl_*", "FC_*") over standard presets,
+// so we set exactly one state at 100% instead of stacking several (which could
+// open the mouth more than intended).
+function pickExpressionForPreset(names: string[], preset: FacePreset): string | null {
+  const candidates = names.filter((n) => matchFaceEmotion(n) === preset);
+  if (candidates.length === 0) return null;
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const score = (n: string) => {
+    const s = norm(n);
+    let v = 0;
+    if (s.includes('all')) v += 4;
+    if (s.startsWith('fc') || s.includes('fcl')) v += 3;
+    return v - n.length * 0.01;
+  };
+  return [...candidates].sort((a, b) => score(b) - score(a))[0];
+}
 
 export default function Page() {
   const [vrmUrl, setVrmUrl] = useState<string | null>(DEFAULT_VRM_URL);
@@ -54,6 +72,8 @@ export default function Page() {
   const [optimization, setOptimization] = useState<OptimizationConfig>(DEFAULT_OPTIMIZATION);
   const [mtoon, setMtoon] = useState<MToonConfig>(DEFAULT_MTOON);
   const [wind, setWind] = useState<WindConfig>(DEFAULT_WIND);
+  const [expressionNames, setExpressionNames] = useState<string[]>([]);
+  const [faceWeights, setFaceWeights] = useState<Record<string, number>>({});
   const [fov, setFov] = useState<number>(CAMERA.FOV_DEFAULT);
   const [orthographic, setOrthographic] = useState(false);
   const [telemetry, setTelemetry] = useState<Telemetry>({ fps: 0, textures: 0, calls: 0, geometries: 0 });
@@ -133,6 +153,14 @@ export default function Page() {
         const s = config.shader;
         if (s && typeof s === 'object') {
           const merged = { ...DEFAULT_SHADER, ...s };
+          // Migrate old single-effect config (`preset`) to the new multi-select
+          // `effects` array.
+          if (!Array.isArray(merged.effects)) {
+            const legacyPreset = (s as { preset?: string }).preset;
+            merged.effects = legacyPreset && legacyPreset !== 'off'
+              ? [legacyPreset as ShaderPreset]
+              : [];
+          }
           // Old configs used a low bloom threshold that made white and the
           // custom background glow. Bump them to the new emissive-only range.
           if (typeof merged.bloomThreshold === 'number' && merged.bloomThreshold < 1) {
@@ -220,12 +248,40 @@ export default function Page() {
         authors: result.meta.authors ? [...result.meta.authors] : undefined,
       });
     }
+    // Face tab only exposes emotion/state blend shapes (no vowels/blink/look).
+    const allNames = (result.vrm.expressionManager?.expressions ?? []).map((e) => e.expressionName);
+    const emotionNames = allNames.filter((n) => matchFaceEmotion(n) !== null);
+    setExpressionNames(emotionNames);
+    // Neutral starts at 100% when the model has a neutral state; otherwise the
+    // base face (all weights 0) is already neutral.
+    const neutralName = pickExpressionForPreset(emotionNames, 'neutral');
+    const initial: Record<string, number> = {};
+    for (const name of emotionNames) initial[name] = name === neutralName ? 1 : 0;
+    setFaceWeights(initial);
   }, []);
 
   const handleError = useCallback((err: Error) => {
     setVrmStatus('error');
     setVrmError(err.message);
   }, []);
+
+  const handleFaceWeightChange = useCallback((name: string, value: number) => {
+    setFaceWeights((prev) => ({ ...prev, [name]: value }));
+  }, []);
+
+  const handleFacePreset = useCallback((preset: FacePreset) => {
+    setFaceWeights(() => {
+      // Exclusive state: exactly one expression at 100%, all others at 0.
+      // This avoids stacking emotions (which used to open the mouth more).
+      let target = pickExpressionForPreset(expressionNames, preset);
+      if (!target && preset === 'fun') {
+        target = pickExpressionForPreset(expressionNames, 'happy');
+      }
+      const next: Record<string, number> = {};
+      for (const name of expressionNames) next[name] = name === target ? 1 : 0;
+      return next;
+    });
+  }, [expressionNames]);
 
   const handleResetVRM = useCallback(() => {
     if (prevBlobUrlRef.current) {
@@ -324,6 +380,7 @@ export default function Page() {
             idleSwayEnabled={idleSwayEnabled} idleSwayIntensity={idleSwayIntensity}
             gazeDesiredRef={desiredRef} gazeCurrentRef={currentRef}
             mouthValueRef={mouthValueRef} avatarOffsetRef={avatarOffsetRef}
+            faceWeights={faceWeights}
             rotationRef={rotationRef}
             cameraHomeRef={cameraHomeRef}
             greenScreen={greenScreen} chromaColor={chromaColor} backgroundImageUrl={backgroundImageUrl}
@@ -425,6 +482,8 @@ export default function Page() {
               mtoon={mtoon} shader={shader}
               onMtoonChange={setMtoon} onShaderChange={setShader}
               wind={wind} onWindChange={setWind}
+              expressionNames={expressionNames} faceWeights={faceWeights}
+              onFaceWeightChange={handleFaceWeightChange} onFacePreset={handleFacePreset}
               onPickFile={handlePickFile} onResetVRM={handleResetVRM}
               onSaveConfig={handleSaveConfig}
               onClose={() => setAvatarPanelOpen(false)}

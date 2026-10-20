@@ -2,11 +2,14 @@
 
 import * as THREE from 'three';
 import type { VRM } from '@pixiv/three-vrm';
-import type { ShaderConfig, ShaderPreset } from './constants';
+import type { ShaderConfig } from './constants';
 
 export interface VRMFXUniforms {
   uTime: THREE.IUniform<number>;
-  uPreset: THREE.IUniform<number>;
+  uHologramOn: THREE.IUniform<number>;
+  uDissolveOn: THREE.IUniform<number>;
+  uGlowOn: THREE.IUniform<number>;
+  uScanlineOn: THREE.IUniform<number>;
   uIntensity: THREE.IUniform<number>;
   uColor: THREE.IUniform<THREE.Color>;
   uDissolve: THREE.IUniform<number>;
@@ -19,22 +22,13 @@ type CompiledShader = {
   fragmentShader: string;
 };
 
-const PRESET_INDEX: Record<ShaderPreset, number> = {
-  off: 0,
-  hologram: 1,
-  dissolve: 2,
-  glow: 3,
-  scanline: 4,
-  // Handled outside the fragment injection (native outline / post-process).
-  outline: 0,
-  chromatic: 0,
-  pixel: 0,
-};
-
 export function createVRMFXUniforms(): VRMFXUniforms {
   return {
     uTime: { value: 0 },
-    uPreset: { value: 0 },
+    uHologramOn: { value: 0 },
+    uDissolveOn: { value: 0 },
+    uGlowOn: { value: 0 },
+    uScanlineOn: { value: 0 },
     uIntensity: { value: 0.5 },
     uColor: { value: new THREE.Color('#38f0ff') },
     uDissolve: { value: 0 },
@@ -47,7 +41,10 @@ const VARYING = /* glsl */ `varying vec3 vFXPosition;`;
 
 const FRAGMENT_HEAD = /* glsl */ `
   uniform float uTime;
-  uniform float uPreset;
+  uniform float uHologramOn;
+  uniform float uDissolveOn;
+  uniform float uGlowOn;
+  uniform float uScanlineOn;
   uniform float uIntensity;
   uniform vec3  uColor;
   uniform float uDissolve;
@@ -66,30 +63,36 @@ const FRAGMENT_HEAD = /* glsl */ `
 // viewDir, vViewPosition, gl_FragCoord, vFXPosition and the uniforms above.
 // Swap this block to author a different effect.
 const FRAGMENT_EFFECT = /* glsl */ `
-  if (uPreset > 0.5) {
+  {
     vec3 tint = uColor;
     float fres = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 3.0);
     vec3 fx = fxCol;
 
-    if (uPreset < 1.5) {
+    if (uHologramOn > 0.5) {
       // Hologram: animated scanlines + fresnel rim + flicker.
       float scan = 0.5 + 0.5 * sin((gl_FragCoord.y + uTime * 220.0) * uScanDensity);
       float flicker = 0.85 + 0.15 * sin(uTime * 42.0);
       vec3 holo = tint * (0.30 + 0.70 * scan) * flicker + tint * fres * 1.25;
       fx = mix(fx, holo, uIntensity);
-    } else if (uPreset < 2.5) {
+    }
+
+    if (uDissolveOn > 0.5) {
       // Dissolve: per-fragment noise threshold + glowing edge.
       float noise = vrmFXHash(floor(vFXPosition.xy * 90.0));
       if (noise < uDissolve) discard;
       float edge = smoothstep(uDissolve, uDissolve + 0.08, noise);
       fx = mix(fx, tint, uIntensity * 0.6);
       fx += tint * (1.0 - edge) * uIntensity * 1.6;
-    } else if (uPreset < 3.5) {
+    }
+
+    if (uGlowOn > 0.5) {
       // Glow: pulsing emissive on bright areas and rim.
       float pulse = 0.7 + 0.3 * sin(uTime * 3.0);
       float lum = dot(fxCol, vec3(0.2126, 0.7152, 0.0722));
       fx += tint * (lum + fres) * uIntensity * pulse;
-    } else {
+    }
+
+    if (uScanlineOn > 0.5) {
       // Scanline overlay across the whole model.
       float scan = 0.5 + 0.5 * sin(gl_FragCoord.y * uScanDensity * 6.2831);
       fx = mix(fx, fx * 0.4 + tint * scan * 0.6, uIntensity);
@@ -174,11 +177,17 @@ export function updateVRMFX(
   elapsed: number,
 ): void {
   uniforms.uTime.value = elapsed;
-  uniforms.uPreset.value = PRESET_INDEX[config.preset] ?? 0;
   uniforms.uIntensity.value = config.intensity;
   uniforms.uColor.value.set(config.color);
   uniforms.uDissolve.value = config.dissolve;
   uniforms.uScanDensity.value = config.scanline;
+
+  // Multiple effects can be active at once.
+  const effects = config.effects;
+  uniforms.uHologramOn.value = effects.includes('hologram') ? 1 : 0;
+  uniforms.uDissolveOn.value = effects.includes('dissolve') ? 1 : 0;
+  uniforms.uGlowOn.value = effects.includes('glow') ? 1 : 0;
+  uniforms.uScanlineOn.value = effects.includes('scanline') ? 1 : 0;
 }
 
 type OutlineMaterial = THREE.Material & {
@@ -239,7 +248,7 @@ function ensureVRMOutline(vrm: VRM): void {
 // Drives MToon's native outline uniforms from the ShaderConfig. When the
 // Outline preset is inactive, the material's original values are restored.
 export function updateVRMOutline(vrm: VRM, config: ShaderConfig): void {
-  const active = config.preset === 'outline';
+  const active = config.effects.includes('outline');
 
   // Only synthesize outlines when the model has none at all, so we never add
   // outlines the author deliberately omitted (e.g. the mouth). Done once.

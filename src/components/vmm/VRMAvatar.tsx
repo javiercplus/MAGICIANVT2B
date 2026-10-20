@@ -39,6 +39,7 @@ interface VRMAvatarProps {
   gazeCurrentRef: React.RefObject<GazeTarget>;
   mouthValueRef: React.RefObject<number>;
   avatarOffsetRef: React.RefObject<THREE.Vector3>;
+  faceWeights: Record<string, number>;
   onLoaded?: (result: LoadVRMResult) => void;
   onError?: (err: Error) => void;
 }
@@ -47,7 +48,7 @@ export function VRMAvatar(props: VRMAvatarProps) {
   const {
     vrmUrl, gazeEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity,
     shaderConfig, optimization, mtoon, wind, rotationRef, cameraHomeRef,
-    gazeDesiredRef, gazeCurrentRef, mouthValueRef, avatarOffsetRef,
+    gazeDesiredRef, gazeCurrentRef, mouthValueRef, avatarOffsetRef, faceWeights,
     onLoaded, onError,
   } = props;
 
@@ -57,6 +58,7 @@ export function VRMAvatar(props: VRMAvatarProps) {
   const vrmRef = useRef<VRM | null>(null);
   const lastMouthRef = useRef(0);
   const lastBlinkRef = useRef(0);
+  const lastFaceRef = useRef<Record<string, number>>(faceWeights);
   const vrm0Ref = useRef(false);
   const physicsAccRef = useRef(0);
   const headBoneRef = useRef<THREE.Object3D | null>(null);
@@ -109,6 +111,12 @@ export function VRMAvatar(props: VRMAvatarProps) {
         spineBoneRef.current = vrm.humanoid?.getNormalizedBoneNode('spine') ?? null;
         applyStandPose(vrm);
         vrm0Ref.current = isVRM0(vrm);
+        // Start every new model from a neutral face: no leftover blink/mouth
+        // pose from the previous avatar, and physics accumulators reset.
+        blinkStateRef.current = { elapsed: 0, nextDelay: randomNextBlinkDelay() };
+        lastMouthRef.current = 0;
+        lastBlinkRef.current = 0;
+        physicsAccRef.current = 0;
         // Post-processing tone maps once (OutputPass). Materials must not do it
         // again or colors get washed out; MToon also gets its color textures
         // flagged as sRGB here.
@@ -222,6 +230,15 @@ export function VRMAvatar(props: VRMAvatarProps) {
       rightEye.quaternion.setFromEuler(euler);
     }
 
+    // Manual Face-tab blend shapes. Applied before lipsync/blink so the
+    // automatic mouth and blink channels still take priority.
+    const face = faceWeights;
+    for (const name in face) {
+      try { vrm.expressionManager?.setValue(name, face[name]); } catch {}
+    }
+    const faceChanged = lastFaceRef.current !== face;
+    lastFaceRef.current = face;
+
     const wantMouth = mouthValueRef.current ?? 0;
     try {
       vrm.expressionManager?.setValue(LIPSYNC.MOUTH_OPEN_PRESET, wantMouth);
@@ -247,6 +264,7 @@ export function VRMAvatar(props: VRMAvatarProps) {
     // Blend-shape optimization: expressions are only re-solved (morphTarget
     // influences rewritten) when the target weights actually move.
     const expressionsDirty =
+      faceChanged ||
       Math.abs(wantMouth - lastMouthRef.current) > 0.004 ||
       Math.abs(wantBlink - lastBlinkRef.current) > 0.004;
     lastMouthRef.current = wantMouth;

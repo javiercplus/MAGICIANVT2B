@@ -32,6 +32,7 @@ interface VRMSceneProps {
   gazeCurrentRef: React.RefObject<GazeTarget>;
   mouthValueRef: React.RefObject<number>;
   avatarOffsetRef: React.RefObject<THREE.Vector3>;
+  faceWeights: Record<string, number>;
   rotationRef: React.RefObject<ModelRotation>;
   cameraHomeRef: React.RefObject<CameraHome | null>;
   greenScreen?: boolean;
@@ -249,7 +250,7 @@ function RendererColorSettings({ adjust }: { adjust: AdjustConfig }) {
 export function VRMScene(props: VRMSceneProps) {
   const {
     vrmUrl, gazeEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity,
-    gazeDesiredRef, gazeCurrentRef, mouthValueRef, avatarOffsetRef, rotationRef, cameraHomeRef,
+    gazeDesiredRef, gazeCurrentRef, mouthValueRef, avatarOffsetRef, faceWeights, rotationRef, cameraHomeRef,
     greenScreen = false, chromaColor = GREEN_SCREEN.COLOR, backgroundImageUrl = null,
     lighting, adjust, shader, optimization, mtoon, wind,
     zoom, fov, orthographic, onZoomChange,
@@ -309,6 +310,7 @@ export function VRMScene(props: VRMSceneProps) {
         cameraHomeRef={cameraHomeRef}
         gazeDesiredRef={gazeDesiredRef} gazeCurrentRef={gazeCurrentRef}
         mouthValueRef={mouthValueRef} avatarOffsetRef={avatarOffsetRef}
+        faceWeights={faceWeights}
         onLoaded={onLoaded} onError={onError}
       />
 

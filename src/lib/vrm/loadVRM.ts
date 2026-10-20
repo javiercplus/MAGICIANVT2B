@@ -15,6 +15,26 @@ export interface LoadVRMResult {
   };
 }
 
+// Force every facial blend shape to its neutral (0) state. Some VRMs ship with
+// non-zero morph weights baked in, and re-loading while a blink/mouth pose is
+// active can leak that pose into the new model. Zeroing the expression weights
+// and the raw morphTargetInfluences guarantees the base/neutral face on load.
+function resetExpressionsToNeutral(vrm: VRM): void {
+  const em = vrm.expressionManager;
+  if (em) {
+    em.resetValues();
+    em.update();
+  }
+
+  vrm.scene.traverse((obj: THREE.Object3D) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const influences = (mesh as unknown as { morphTargetInfluences?: number[] }).morphTargetInfluences;
+    if (!influences) return;
+    for (let i = 0; i < influences.length; i++) influences[i] = 0;
+  });
+}
+
 // Per-instance setup mirroring VMagicMirror's VRMLoadController:
 // - rotateVRM0: VRM 0.x faces +Z after 180° rotation (no-op for VRM 1.0).
 //   It reads vrm.meta.metaVersion, so it must receive the VRM (not vrm.scene).
@@ -33,6 +53,8 @@ function applyVRMSetup(vrm: VRM): void {
       mesh.castShadow = true;
     }
   });
+
+  resetExpressionsToNeutral(vrm);
 }
 
 function extractResult(gltf: any): LoadVRMResult {
