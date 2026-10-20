@@ -1,7 +1,14 @@
 'use client';
 
 import { HelpCircle, MousePointer2, Move, ZoomIn, Upload, CircleDot, Sun, SlidersHorizontal, Rotate3d, Wind, Camera } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
 const ITEMS: { icon: React.ReactNode; title: string; description: string }[] = [
@@ -68,8 +75,8 @@ interface HelpButtonProps {
 
 export function HelpButton({ className }: HelpButtonProps) {
   return (
-    <Popover>
-      <PopoverTrigger asChild>
+    <Dialog>
+      <DialogTrigger asChild>
         <button
           type="button"
           aria-label="Help"
@@ -84,32 +91,34 @@ export function HelpButton({ className }: HelpButtonProps) {
         >
           <HelpCircle className="w-4 h-4" />
         </button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="end"
-        sideOffset={8}
-        className="w-72 bg-zinc-900/95 border-zinc-700 text-zinc-100 backdrop-blur-md shadow-2xl shadow-black/40"
+      </DialogTrigger>
+      <DialogContent
+        className={cn(
+          'max-h-[82vh] overflow-y-auto',
+          'bg-zinc-900/95 border-zinc-700 text-zinc-100',
+          'backdrop-blur-md shadow-2xl shadow-black/50',
+        )}
       >
-        <div className="space-y-3">
-          <div>
-            <h4 className="text-sm font-semibold text-zinc-100">Controls</h4>
-            <p className="text-[11px] text-zinc-400">How to interact with the avatar viewer.</p>
-          </div>
-          <ul className="space-y-2.5">
-            {ITEMS.map((item) => (
-              <li key={item.title} className="flex items-start gap-2.5">
-                <span className="flex items-center justify-center rounded-md w-6 h-6 shrink-0 mt-0.5 bg-zinc-800/60 text-violet-300">
-                  {item.icon}
-                </span>
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-zinc-100">{item.title}</p>
-                  <p className="text-[11px] text-zinc-400 leading-snug">{item.description}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </PopoverContent>
-    </Popover>
+        <DialogHeader>
+          <DialogTitle className="text-sm font-semibold text-zinc-100">Controls</DialogTitle>
+          <DialogDescription className="text-[11px] text-zinc-400">
+            How to interact with the avatar viewer.
+          </DialogDescription>
+        </DialogHeader>
+        <ul className="space-y-2.5">
+          {ITEMS.map((item) => (
+            <li key={item.title} className="flex items-start gap-2.5">
+              <span className="flex items-center justify-center rounded-md w-6 h-6 shrink-0 mt-0.5 bg-zinc-800/60 text-violet-300">
+                {item.icon}
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-zinc-100">{item.title}</p>
+                <p className="text-[11px] text-zinc-400 leading-snug">{item.description}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </DialogContent>
+    </Dialog>
   );
 }
