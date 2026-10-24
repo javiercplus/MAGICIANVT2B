@@ -21,6 +21,126 @@ export interface VmcBonePose {
 
 export type VmcHeadPose = VmcBonePose;
 
+// === VMagicMirror / Vear / Luppet / HANA_Tool 52 ARKit Perfect Sync BlendShapeClip names ===
+export const PERFECT_SYNC_CLIP_NAMES = [
+  'BrowInnerUp',
+  'BrowDownLeft',
+  'BrowDownRight',
+  'BrowOuterUpLeft',
+  'BrowOuterUpRight',
+  'EyeLookUpLeft',
+  'EyeLookUpRight',
+  'EyeLookDownLeft',
+  'EyeLookDownRight',
+  'EyeLookInLeft',
+  'EyeLookInRight',
+  'EyeLookOutLeft',
+  'EyeLookOutRight',
+  'EyeBlinkLeft',
+  'EyeBlinkRight',
+  'EyeSquintRight',
+  'EyeSquintLeft',
+  'EyeWideLeft',
+  'EyeWideRight',
+  'CheekPuff',
+  'CheekSquintLeft',
+  'CheekSquintRight',
+  'NoseSneerLeft',
+  'NoseSneerRight',
+  'JawOpen',
+  'JawForward',
+  'JawLeft',
+  'JawRight',
+  'MouthFunnel',
+  'MouthPucker',
+  'MouthLeft',
+  'MouthRight',
+  'MouthRollUpper',
+  'MouthRollLower',
+  'MouthShrugUpper',
+  'MouthShrugLower',
+  'MouthClose',
+  'MouthSmileLeft',
+  'MouthSmileRight',
+  'MouthFrownLeft',
+  'MouthFrownRight',
+  'MouthDimpleLeft',
+  'MouthDimpleRight',
+  'MouthUpperUpLeft',
+  'MouthUpperUpRight',
+  'MouthLowerDownLeft',
+  'MouthLowerDownRight',
+  'MouthPressLeft',
+  'MouthPressRight',
+  'MouthStretchLeft',
+  'MouthStretchRight',
+  'TongueOut',
+] as const;
+
+export type PerfectSyncClipName = (typeof PERFECT_SYNC_CLIP_NAMES)[number];
+
+const PERFECT_SYNC_BY_LOWER: Record<string, PerfectSyncClipName> = (() => {
+  const map: Record<string, PerfectSyncClipName> = {};
+  for (const name of PERFECT_SYNC_CLIP_NAMES) {
+    map[name.toLowerCase()] = name;
+  }
+  return map;
+})();
+
+export function normalizeExpressionKey(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+export function resolvePerfectSyncClipName(name: string): PerfectSyncClipName | null {
+  const key = normalizeExpressionKey(name);
+  return PERFECT_SYNC_BY_LOWER[key] ?? null;
+}
+
+export function isPerfectSyncClipName(name: string): boolean {
+  return resolvePerfectSyncClipName(name) !== null;
+}
+
+// Mirror Left <-> Right for Perfect Sync ARKit blendshapes when mirrorLeftRight is active
+export function swapLeftRightPerfectSyncName(name: PerfectSyncClipName): PerfectSyncClipName {
+  if (name.endsWith('Left')) {
+    return (name.slice(0, -4) + 'Right') as PerfectSyncClipName;
+  }
+  if (name.endsWith('Right')) {
+    return (name.slice(0, -5) + 'Left') as PerfectSyncClipName;
+  }
+  return name;
+}
+
+// Fallback mapping from 52 ARKit Perfect Sync blendshapes -> standard VRM 1.0 / VRM 0.x expressions
+// Used when `perfectSyncFallback` is enabled and the loaded VRM model does not have the native
+// Perfect Sync BlendShapeClip for a given ARKit channel.
+export const PERFECT_SYNC_FALLBACK_MAP: Partial<Record<PerfectSyncClipName, string[]>> = {
+  EyeBlinkLeft: ['blinkLeft', 'Blink_L', 'Fcl_EYE_Close_L'],
+  EyeBlinkRight: ['blinkRight', 'Blink_R', 'Fcl_EYE_Close_R'],
+  EyeLookUpLeft: ['lookUp', 'LookUp'],
+  EyeLookUpRight: ['lookUp', 'LookUp'],
+  EyeLookDownLeft: ['lookDown', 'LookDown'],
+  EyeLookDownRight: ['lookDown', 'LookDown'],
+  EyeLookInLeft: ['lookRight', 'LookRight'],
+  EyeLookOutRight: ['lookRight', 'LookRight'],
+  EyeLookInRight: ['lookLeft', 'LookLeft'],
+  EyeLookOutLeft: ['lookLeft', 'LookLeft'],
+  JawOpen: ['aa', 'A', 'Fcl_MTH_A'],
+  MouthFunnel: ['oh', 'O', 'Fcl_MTH_O'],
+  MouthPucker: ['ou', 'U', 'Fcl_MTH_U'],
+  MouthStretchLeft: ['ee', 'E', 'Fcl_MTH_E'],
+  MouthStretchRight: ['ee', 'E', 'Fcl_MTH_E'],
+  MouthSmileLeft: ['happy', 'Joy', 'Fcl_ALL_Joy', 'FC_Happy', 'relaxed', 'Fun'],
+  MouthSmileRight: ['happy', 'Joy', 'Fcl_ALL_Joy', 'FC_Happy', 'relaxed', 'Fun'],
+  MouthFrownLeft: ['sad', 'Sorrow', 'Fcl_ALL_Sorrow', 'FC_Sad'],
+  MouthFrownRight: ['sad', 'Sorrow', 'Fcl_ALL_Sorrow', 'FC_Sad'],
+  BrowDownLeft: ['angry', 'Angry', 'Fcl_ALL_Angry', 'FC_Angry'],
+  BrowDownRight: ['angry', 'Angry', 'Fcl_ALL_Angry', 'FC_Angry'],
+  BrowInnerUp: ['surprised', 'Surprised', 'Fcl_ALL_Surprised'],
+  EyeWideLeft: ['surprised', 'Surprised', 'Fcl_ALL_Surprised'],
+  EyeWideRight: ['surprised', 'Surprised', 'Fcl_ALL_Surprised'],
+};
+
 export interface VmcReceiveConfig {
   enabled: boolean;
   port: number;
@@ -32,6 +152,8 @@ export interface VmcReceiveConfig {
   applyHipsPosition: boolean;
   applySpineBase: boolean; // VMagicMirror: "Apply Base Spine Bones Tracking Result"
   applyBlendShape: boolean;
+  usePerfectSync: boolean; // VMagicMirror: "Use Perfect Sync" (52 ARKit BlendShapeClips via External Tracking / VMC)
+  perfectSyncFallback: boolean; // Fallback to standard VRM expressions when model lacks Perfect Sync clips
   smoothPose: boolean;     // VMagicMirror: "Smooth Received Pose"
   // Axis Inversion / Coordinate Calibration
   invertX: boolean;        // Pitch (X rotation)
@@ -48,6 +170,7 @@ export interface VmcSendConfig {
   sendFingerBonePoses: boolean;
   sendBlendShapeData: boolean;
   sendCustomBlendShape: boolean;
+  sendPerfectSync: boolean; // Emit 52 ARKit Perfect Sync blendshapes via /VMC/Ext/Blend/Val
   convertToVrm0BlendShapeName: boolean;
   limitDataRate30: boolean;
 }
@@ -75,6 +198,8 @@ export const DEFAULT_VMC_CONFIG: VmcConfig = {
     applyHipsPosition: false,
     applySpineBase: false,
     applyBlendShape: true,
+    usePerfectSync: true,
+    perfectSyncFallback: true,
     smoothPose: true,
     invertX: false,
     invertY: true,
@@ -89,6 +214,7 @@ export const DEFAULT_VMC_CONFIG: VmcConfig = {
     sendFingerBonePoses: true,
     sendBlendShapeData: true,
     sendCustomBlendShape: true,
+    sendPerfectSync: true,
     convertToVrm0BlendShapeName: true,
     limitDataRate30: false,
   },
@@ -264,7 +390,7 @@ const VRM1_TO_VRM0_BLENDSHAPE: Record<string, string> = {
   neutral: 'Neutral',
 };
 
-// Incoming VMC BlendShape name (VRM 0.x, VRM 1.0, or ARKit) -> VRM 1.0 expression candidates
+// Incoming VMC BlendShape name (VRM 0.x or VRM 1.0) -> VRM 1.0 expression candidates
 const VMC_TO_VRM_EXPRESSIONS: Record<string, string[]> = {
   joy: ['happy', 'Joy', 'Fcl_ALL_Joy', 'FC_Happy'],
   happy: ['happy', 'Joy', 'Fcl_ALL_Joy', 'FC_Happy'],
@@ -295,37 +421,87 @@ const VMC_TO_VRM_EXPRESSIONS: Record<string, string[]> = {
   lookleft: ['lookLeft', 'LookLeft'],
   lookright: ['lookRight', 'LookRight'],
   neutral: ['neutral', 'Neutral', 'Fcl_ALL_Neutral'],
-  eyeblinkleft: ['blinkLeft', 'Blink_L'],
-  eyeblinkright: ['blinkRight', 'Blink_R'],
-  jawopen: ['aa', 'A'],
-  mouthsmileleft: ['happy', 'Joy'],
-  mouthsmileright: ['happy', 'Joy'],
 };
 
 const STANDARD_VRM_EXPRESSIONS = new Set(Object.keys(VRM1_TO_VRM0_BLENDSHAPE));
 
-export function mapReceivedBlendShapeNames(name: string): string[] {
+export function mapReceivedBlendShapeNames(
+  name: string,
+  options?: {
+    usePerfectSync?: boolean;
+    perfectSyncFallback?: boolean;
+    mirrorLeftRight?: boolean;
+  },
+): {
+  isPerfectSync: boolean;
+  perfectSyncClip: PerfectSyncClipName | null;
+  primaryCandidates: string[];
+  fallbackCandidates: string[];
+} {
+  const usePerfectSync = options?.usePerfectSync ?? true;
+  const perfectSyncFallback = options?.perfectSyncFallback ?? true;
+  const mirrorLeftRight = options?.mirrorLeftRight ?? false;
+
+  const psClipRaw = resolvePerfectSyncClipName(name);
+  if (psClipRaw) {
+    const psClip = mirrorLeftRight ? swapLeftRightPerfectSyncName(psClipRaw) : psClipRaw;
+    if (!usePerfectSync) {
+      return {
+        isPerfectSync: true,
+        perfectSyncClip: psClip,
+        primaryCandidates: [],
+        fallbackCandidates: perfectSyncFallback ? (PERFECT_SYNC_FALLBACK_MAP[psClip] ?? []) : [],
+      };
+    }
+    const camelCase = psClip.charAt(0).toLowerCase() + psClip.slice(1);
+    const primary = Array.from(new Set([psClip, camelCase, name]));
+    const fallback = perfectSyncFallback ? (PERFECT_SYNC_FALLBACK_MAP[psClip] ?? []) : [];
+    return {
+      isPerfectSync: true,
+      perfectSyncClip: psClip,
+      primaryCandidates: primary,
+      fallbackCandidates: fallback,
+    };
+  }
+
   const key = name.toLowerCase().trim();
   const mapped = VMC_TO_VRM_EXPRESSIONS[key];
   if (mapped) {
-    return mapped.includes(name) ? mapped : [name, ...mapped];
+    const primary = mapped.includes(name) ? mapped : [name, ...mapped];
+    return {
+      isPerfectSync: false,
+      perfectSyncClip: null,
+      primaryCandidates: primary,
+      fallbackCandidates: [],
+    };
   }
-  return [name];
+
+  return {
+    isPerfectSync: false,
+    perfectSyncClip: null,
+    primaryCandidates: [name],
+    fallbackCandidates: [],
+  };
 }
 
-// VRM expression name -> ARKit blendshape names expected by VTube Studio.
-const BLENDSHAPE_MAP: Record<string, string[]> = {
-  blink: ['eyeBlinkLeft', 'eyeBlinkRight'],
-  blinkLeft: ['eyeBlinkLeft'],
-  blinkRight: ['eyeBlinkRight'],
-  aa: ['jawOpen'],
-  happy: ['mouthSmileLeft', 'mouthSmileRight'],
-  angry: ['browDownLeft', 'browDownRight'],
-  surprised: ['browInnerUp'],
-  lookLeft: ['eyeLookInLeft', 'eyeLookOutRight'],
-  lookRight: ['eyeLookInRight', 'eyeLookOutLeft'],
-  lookUp: ['eyeLookUpLeft', 'eyeLookUpRight'],
-  lookDown: ['eyeLookDownLeft', 'eyeLookDownRight'],
+// VRM expression name -> ARKit blendshape names expected by VMagicMirror / VTube Studio / Perfect Sync receivers.
+const BLENDSHAPE_MAP: Record<string, PerfectSyncClipName[]> = {
+  blink: ['EyeBlinkLeft', 'EyeBlinkRight'],
+  blinkLeft: ['EyeBlinkLeft'],
+  blinkRight: ['EyeBlinkRight'],
+  aa: ['JawOpen'],
+  ih: ['MouthStretchLeft', 'MouthStretchRight'],
+  ou: ['MouthPucker'],
+  ee: ['MouthSmileLeft', 'MouthSmileRight', 'MouthStretchLeft', 'MouthStretchRight'],
+  oh: ['MouthFunnel'],
+  happy: ['MouthSmileLeft', 'MouthSmileRight'],
+  sad: ['MouthFrownLeft', 'MouthFrownRight'],
+  angry: ['BrowDownLeft', 'BrowDownRight'],
+  surprised: ['BrowInnerUp', 'EyeWideLeft', 'EyeWideRight'],
+  lookLeft: ['EyeLookInRight', 'EyeLookOutLeft'],
+  lookRight: ['EyeLookInLeft', 'EyeLookOutRight'],
+  lookUp: ['EyeLookUpLeft', 'EyeLookUpRight'],
+  lookDown: ['EyeLookDownLeft', 'EyeLookDownRight'],
 };
 
 // Coordinate conversion for VMC Send (Three.js VRM 1.0 -> Unity VMC):
@@ -363,6 +539,7 @@ export const vmcReceivedState = {
   bones: {} as Record<string, VmcBonePose>,
   stagingBlendshapes: {} as Record<string, number>,
   blendshapes: {} as Record<string, number>,
+  perfectSyncActiveCount: 0, // Number of active ARKit Perfect Sync channels received
 };
 
 export function isVmcReceivingActive(now = performance.now()): boolean {
@@ -375,6 +552,7 @@ export function clearVmcReceivedState(): void {
   vmcReceivedState.bones = {};
   vmcReceivedState.stagingBlendshapes = {};
   vmcReceivedState.blendshapes = {};
+  vmcReceivedState.perfectSyncActiveCount = 0;
 }
 
 // Process a raw UDP datagram received from a VMC Performer/Sender app
@@ -463,12 +641,16 @@ function handleOscMessage(msg: OscMessage): boolean {
     const val = Math.max(0, Math.min(1, Number(args[1]) || 0));
     vmcReceivedState.stagingBlendshapes[name] = val;
     vmcReceivedState.blendshapes[name] = val;
+    if (isPerfectSyncClipName(name)) {
+      recountPerfectSyncChannels();
+    }
     return true;
   }
 
   // VMC BlendShape commit: /VMC/Ext/Blend/Apply
   if (address === '/VMC/Ext/Blend/Apply') {
     vmcReceivedState.blendshapes = { ...vmcReceivedState.stagingBlendshapes };
+    recountPerfectSyncChannels();
     return true;
   }
 
@@ -477,6 +659,9 @@ function handleOscMessage(msg: OscMessage): boolean {
     const name = address.slice('/VMC/Blendshape/'.length);
     const val = Math.max(0, Math.min(1, Number(args[0]) || 0));
     vmcReceivedState.blendshapes[name] = val;
+    if (isPerfectSyncClipName(name)) {
+      recountPerfectSyncChannels();
+    }
     return true;
   }
 
@@ -486,6 +671,14 @@ function handleOscMessage(msg: OscMessage): boolean {
   }
 
   return false;
+}
+
+function recountPerfectSyncChannels(): void {
+  let count = 0;
+  for (const key of Object.keys(vmcReceivedState.blendshapes)) {
+    if (isPerfectSyncClipName(key)) count++;
+  }
+  vmcReceivedState.perfectSyncActiveCount = count;
 }
 
 // Build standard VMC Protocol Performer packets (bundled for efficiency)
@@ -564,8 +757,29 @@ export function buildVmcSendDatagrams(
 
   // 3. BlendShape data (/VMC/Ext/Blend/Val + /VMC/Ext/Blend/Apply)
   if (sendConfig.sendBlendShapeData) {
+    const perfectSyncSent = new Set<PerfectSyncClipName>();
+
     for (const [name, weight] of Object.entries(state.blendshapes)) {
       const isStandard = STANDARD_VRM_EXPRESSIONS.has(name);
+      const psClip = resolvePerfectSyncClipName(name);
+
+      if (psClip) {
+        if (!sendConfig.sendPerfectSync) continue;
+        const w = Math.min(1, Math.max(0, Number.isFinite(weight) ? weight : 0));
+        perfectSyncSent.add(psClip);
+        messages.push(
+          encodeOscTypedMessage('/VMC/Ext/Blend/Val', [
+            { type: 's', value: psClip },
+            { type: 'f', value: w },
+          ]),
+        );
+        const camelTarget = psClip.charAt(0).toLowerCase() + psClip.slice(1);
+        if (w > 0.01) {
+          messages.push(encodeOscMessage(`/VMC/Blendshape/${camelTarget}`, [w]));
+        }
+        continue;
+      }
+
       if (!sendConfig.sendCustomBlendShape && !isStandard) continue;
 
       const w = Math.min(1, Math.max(0, Number.isFinite(weight) ? weight : 0));
@@ -580,11 +794,20 @@ export function buildVmcSendDatagrams(
         ]),
       );
 
-      // Compatibility with VTube Studio ARKit blendshapes when active
-      const vtsTargets = BLENDSHAPE_MAP[name];
-      if (vtsTargets && w > 0.01) {
-        for (const target of vtsTargets) {
-          messages.push(encodeOscMessage(`/VMC/Blendshape/${target}`, [w]));
+      // Synthesize Perfect Sync / VTube Studio ARKit blendshapes from standard VRM expressions if not already present on the model
+      const psTargets = BLENDSHAPE_MAP[name];
+      if (psTargets && w > 0.01) {
+        for (const target of psTargets) {
+          if (sendConfig.sendPerfectSync && !perfectSyncSent.has(target)) {
+            messages.push(
+              encodeOscTypedMessage('/VMC/Ext/Blend/Val', [
+                { type: 's', value: target },
+                { type: 'f', value: w },
+              ]),
+            );
+          }
+          const camelTarget = target.charAt(0).toLowerCase() + target.slice(1);
+          messages.push(encodeOscMessage(`/VMC/Blendshape/${camelTarget}`, [w]));
         }
       }
     }

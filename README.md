@@ -1,6 +1,6 @@
 # MAGICIANVT2B
 
-**MAGICIANVT2B** is a desktop 3D avatar application for VTubers, built with **Electron + Next.js + React Three Fiber** and **`@pixiv/three-vrm`**. It loads `.vrm` models, tracks your gaze, does microphone lip-sync, and can stream motion to/from other VMC-compatible apps such as **VTube Studio, VSeeFace or VMagicMirror**.
+**MAGICIANVT2B** is a desktop 3D avatar application for VTubers, built with **Electron + Next.js + React Three Fiber** and **`@pixiv/three-vrm`**. It loads `.vrm` models, tracks your gaze, does microphone lip-sync, and can stream motion and **52 ARKit Perfect Sync** blendshapes to/from other VMC-compatible apps such as **VMagicMirror, VTube Studio, VSeeFace, Luppet or Vear**.
 
 It runs fully offline (static Next.js export served by Electron) and works on Linux, Windows and macOS.
 
@@ -9,16 +9,17 @@ It runs fully offline (static Next.js export served by Electron) and works on Li
 ## Features
 
 - **VRM support** — load custom `.vrm` avatars (VRM 0.x and 1.0).
+- **Perfect Sync (52 ARKit BlendShapeClips)** — full support for VMagicMirror / HANA_Tool / Vear / Luppet 52 ARKit facial expressions (`BrowInnerUp` … `TongueOut`) over VMC Protocol, with automatic morph target binding and optional fallback to standard VRM expressions.
 - **Gaze tracking** — eyes and head follow the mouse; pointer-lock/global tracking to follow the cursor outside the window.
 - **Lip sync** — microphone-driven mouth blendshapes.
-- **Face** — auto-blink, random eyes, idle sway, plus manual emotion/blendshape controls (Happy, Relaxed, Surprised, Sad, Angry, All neutral, All fun).
+- **Face** — auto-blink, random eyes, idle sway, manual emotion/blendshape controls (Happy, Relaxed, Surprised, Sad, Angry, All neutral, All fun), plus individual sliders for all detected Perfect Sync clips.
 - **MToon look** — toon shading, GI equalization, shade shift, rim light and color boost.
 - **Effects (multi-select, combinable)** — Hologram, Dissolve, Glow, Scanline, Outline (native MToon), Chromatic, Pixel, plus **FXAA / MSAA 4x** antialiasing.
 - **Wind** — breeze on hair/skirt/ribbons driven by spring bones.
 - **Lighting & camera** — front/top lights, zoom, FOV, orthographic, view reset.
 - **Backgrounds** — chroma screen with configurable key color, or a custom image.
 - **Optimization panel** — FPS cap, render-scale (internal render target only), FXAA/MSAA, pixel ratio, physics quality, morph optimization, MToon low-power, and live telemetry (FPS, GPU textures, draw calls).
-- **VMC Protocol (send & receive)** — stream head pose + blendshapes to VTube Studio, or receive tracking from other VMC senders. Toggled with the 📻 button (top right).
+- **VMC Protocol (send & receive)** — stream head/skeleton pose + standard & Perfect Sync blendshapes, or receive tracking from external trackers. Toggled with the 📻 button (top right).
 - **Screen recording** — export the avatar canvas to `.webm`.
 - **Auto-save** — avatar and settings persist via IndexedDB + `localStorage`.
 
@@ -52,20 +53,18 @@ The Vulkan build runs Chromium/ANGLE through Vulkan (`enable-features=Vulkan`, `
 2. Tune **VRM model** (MToon, Effects, Face, Wind, meshes), **Options** (Track, Motion, Scene, Camera, Light, Color) and the **Optimization** panel (⚙).
 3. Click **Save Config & Avatar** to remember everything for the next launch.
 
-## VMC Protocol
+## VMC Protocol & Perfect Sync
 
-MAGICIANVT2B speaks VMC (OSC over UDP). Open the VMC panel with the **📻 Radio** button.
+MAGICIANVT2B speaks VMC (OSC over UDP) and supports **VMagicMirror's Perfect Sync** specification (52 iOS ARKit FaceTracking BlendShapeClips). Open the VMC panel with the **📻 Radio** button.
 
-- **Sending (to VTube Studio, etc.)**
-  - Enable **Sending** and set host/port (default `127.0.0.1:39539`).
-  - Sends head/root/bone poses and blendshapes every frame (or capped to 30 Hz).
-  - In VTube Studio: enable *VMC Protocol* receiving on the same port.
-  - Coordinate conversion is Three.js (RH) → VMC/Unity (LH); if the avatar is mirrored/lopsided, use the axis-inversion toggles in the Sending tab.
-- **Receiving (from VSeeFace, VRM Posing Desktop, LuppetX, VMagicMirror, …)**
+- **Receiving (from VMagicMirror, VSeeFace, LuppetX, VRM Posing Desktop, …)**
   - Enable **Receiving** and set the listen port (default `39539`).
-  - The status line shows `Listening…` / `Live (N bones · M pkts)`.
-  - While receiving, local tracking (**gaze, random eyes, idle sway**) is automatically disabled so incoming motion has full control.
-  - Choose which parts to apply (upper body, hands/fingers, legs, eyes, root, hips position, blendshapes) and calibration (axis inversion, mirror L/R, smoothing).
+  - Turn on **Use Perfect Sync** under *Ex.Tracker · Perfect Sync (52 ARKit BlendShapes)* to map all 52 ARKit clips (`BrowInnerUp`, `JawOpen`, `MouthFunnel`, `TongueOut`, etc.) directly to the model's `BlendShapeClip`s or raw mesh shape keys.
+  - Enable **Standard VRM Fallback** so models without Perfect Sync clips still respond with standard VRM expressions (`aa`, `oh`, `ou`, `ee`, `happy`, `sad`, `angry`, `surprised`, `blinkLeft`/`blinkRight`, `look*`).
+  - The status badge shows how many of the 52 Perfect Sync clips your loaded VRM model has (`PS N/52`) and live received ARKit channel counts.
+- **Sending (to VMagicMirror, VTube Studio, etc.)**
+  - Enable **Sending** and set host/port (default `127.0.0.1:39539`).
+  - Sends head/root/bone poses, standard VRM expressions, and all 52 ARKit Perfect Sync blendshapes (`/VMC/Ext/Blend/Val` + `/VMC/Ext/Blend/Apply`).
 
 Debug packets from the terminal:
 

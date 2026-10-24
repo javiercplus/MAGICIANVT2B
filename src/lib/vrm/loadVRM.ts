@@ -2,7 +2,14 @@
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { VRMLoaderPlugin, VRMUtils, type VRM } from '@pixiv/three-vrm';
+import {
+  VRMLoaderPlugin,
+  VRMUtils,
+  VRMExpression,
+  VRMExpressionMorphTargetBind,
+  type VRM,
+} from '@pixiv/three-vrm';
+import { PERFECT_SYNC_CLIP_NAMES, normalizeExpressionKey } from '@/lib/vmc/vmc';
 
 export interface VrmMeshItem {
   id: string;
@@ -42,6 +49,65 @@ function resetExpressionsToNeutral(vrm: VRM): void {
   });
 }
 
+// Auto-register any of the 52 ARKit Perfect Sync blendshapes that exist as raw
+// mesh morphTargets (shape keys) on the model even if the user didn't create
+// explicit VRM BlendShapeClips on Unity (Step 1 of VMagicMirror Perfect Sync).
+function registerPerfectSyncRawMorphBinds(vrm: VRM): void {
+  const em = vrm.expressionManager;
+  if (!em) return;
+
+  const existingNormalized = new Set<string>();
+  for (const expr of em.expressions) {
+    existingNormalized.add(normalizeExpressionKey(expr.expressionName));
+  }
+
+  // Collect all meshes that have a morphTargetDictionary
+  const morphMeshes: THREE.Mesh[] = [];
+  vrm.scene.traverse((obj: THREE.Object3D) => {
+    const mesh = obj as THREE.Mesh;
+    if (mesh.isMesh && mesh.morphTargetDictionary && Array.isArray(mesh.morphTargetInfluences)) {
+      morphMeshes.push(mesh);
+    }
+  });
+
+  if (morphMeshes.length === 0) return;
+
+  for (const clipName of PERFECT_SYNC_CLIP_NAMES) {
+    const targetNorm = normalizeExpressionKey(clipName);
+    if (existingNormalized.has(targetNorm)) continue;
+
+    // Look for matching morph target name across all meshes (e.g. "BrowInnerUp", "browInnerUp", "Fcl_..._BrowInnerUp")
+    const matchingBinds: { primitives: THREE.Mesh[]; index: number }[] = [];
+    for (const mesh of morphMeshes) {
+      const dict = mesh.morphTargetDictionary;
+      if (!dict) continue;
+      for (const [morphName, morphIndex] of Object.entries(dict)) {
+        const morphNorm = normalizeExpressionKey(morphName);
+        if (morphNorm === targetNorm || morphNorm.endsWith(targetNorm)) {
+          matchingBinds.push({ primitives: [mesh], index: morphIndex });
+          break;
+        }
+      }
+    }
+
+    if (matchingBinds.length > 0) {
+      const expr = new VRMExpression(clipName);
+      vrm.scene.add(expr);
+      for (const b of matchingBinds) {
+        expr.addBind(
+          new VRMExpressionMorphTargetBind({
+            primitives: b.primitives,
+            index: b.index,
+            weight: 1.0,
+          }),
+        );
+      }
+      em.registerExpression(expr);
+      existingNormalized.add(targetNorm);
+    }
+  }
+}
+
 // Per-instance setup mirroring VMagicMirror's VRMLoadController:
 // - rotateVRM0: VRM 0.x faces +Z after 180° rotation (no-op for VRM 1.0).
 //   It reads vrm.meta.metaVersion, so it must receive the VRM (not vrm.scene).
@@ -61,6 +127,7 @@ function applyVRMSetup(vrm: VRM): void {
     }
   });
 
+  registerPerfectSyncRawMorphBinds(vrm);
   resetExpressionsToNeutral(vrm);
 }
 

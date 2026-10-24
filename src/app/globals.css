@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "xp.css/dist/XP.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -44,97 +45,207 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --radius: 3px;
+  --background: #ece9d8;
+  --foreground: #000000;
+  --card: #ece9d8;
+  --card-foreground: #000000;
+  --popover: #ece9d8;
+  --popover-foreground: #000000;
+  --primary: #0050ee;
+  --primary-foreground: #ffffff;
+  --secondary: #d4d0c8;
+  --secondary-foreground: #000000;
+  --muted: #e4e1d0;
+  --muted-foreground: #444444;
+  --accent: #316ac5;
+  --accent-foreground: #ffffff;
+  --destructive: #d9381e;
+  --border: #919b9c;
+  --input: #7f9db9;
+  --ring: #0050ee;
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+/* === Windows XP Luna (XP.css) Integration Overrides === */
+body {
+  font-family: "Pixelated MS Sans Serif", Tahoma, Arial, sans-serif;
+  font-size: 11px;
+  color: #000000;
+  background-color: #0b0b12;
+  margin: 0;
+  overflow: hidden;
 }
 
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
+.window {
+  background: #ece9d8;
+  color: #000000;
+  font-family: "Pixelated MS Sans Serif", Tahoma, Arial, sans-serif;
+  font-size: 11px;
+  box-shadow:
+    inset -1px -1px #00138c,
+    inset 1px 1px #0831d9,
+    inset -2px -2px #001ea0,
+    inset 2px 2px #166aee,
+    inset -3px -3px #003bda,
+    inset 3px 3px #0855dd,
+    0 8px 24px rgba(0, 0, 0, 0.55);
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  padding: 0 0 3px 0;
+}
 
-  /* Coherent dark violet scrollbar styling */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  ::-webkit-scrollbar-track {
-    background: rgba(24, 24, 27, 0.5);
-    border-radius: 9999px;
-  }
-  ::-webkit-scrollbar-thumb {
-    background: rgba(82, 82, 91, 0.7);
-    border-radius: 9999px;
-    transition: background 0.2s ease;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: rgba(139, 92, 246, 0.8);
-  }
+.title-bar {
+  font-family: "Trebuchet MS", Tahoma, sans-serif;
+  height: auto;
+  min-height: 26px;
+  padding: 3px 5px 3px 6px;
+  user-select: none;
+}
+
+.title-bar-text {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 700;
+  font-size: 12px;
+  color: #ffffff;
+  text-shadow: 1px 1px #0f1089;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.title-bar-controls {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.title-bar-controls button {
+  min-width: 21px;
+  min-height: 21px;
+  width: 21px;
+  height: 21px;
+  padding: 0;
+  margin-left: 2px;
+}
+
+.window-body {
+  margin: 6px;
+  color: #000000;
+}
+
+/* XP Fieldset / GroupBox */
+fieldset {
+  border: 1px solid #d0d0bf;
+  border-radius: 4px;
+  background: transparent;
+  padding: 8px 8px 8px 8px;
+  margin: 0 0 6px 0;
+}
+
+legend {
+  color: #0046d5;
+  font-weight: 600;
+  padding: 0 4px;
+  background: transparent;
+  font-size: 11px;
+}
+
+/* XP Tabs */
+menu[role="tablist"] {
+  display: flex;
+  flex-wrap: wrap;
+  padding-left: 2px;
+  margin: 0 0 -1px 0;
+  list-style: none;
+}
+
+menu[role="tablist"] button {
+  min-width: unset;
+  min-height: 21px;
+  padding: 2px 8px 3px 8px;
+  font-size: 11px;
+  color: #000000;
+  cursor: pointer;
+}
+
+menu[role="tablist"] button[aria-selected="true"] {
+  color: #000000;
+  font-weight: 600;
+}
+
+article[role="tabpanel"],
+div[role="tabpanel"] {
+  padding: 8px;
+  background: linear-gradient(180deg, #fcfcfe 0%, #f4f3ee 100%);
+  border: 1px solid #919b9c;
+  color: #000000;
+  margin-bottom: 4px;
+}
+
+/* XP Buttons */
+button:not(.title-bar-controls button):not([role="tab"]) {
+  color: #000000;
+  cursor: pointer;
+}
+
+button.xp-compact-btn {
+  min-width: unset;
+  min-height: 21px;
+  padding: 1px 8px;
+}
+
+button.xp-icon-btn {
+  min-width: 28px;
+  min-height: 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* XP Inputs */
+input[type="text"],
+input[type="number"],
+input[type="search"] {
+  padding: 2px 4px;
+  border: 1px solid #7f9db9;
+  background-color: #ffffff;
+  color: #000000;
+  height: 21px;
+  font-size: 11px;
+  border-radius: 0;
+  box-sizing: border-box;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="search"]:focus {
+  outline: none;
+  border-color: #0050ee;
+}
+
+/* XP Range Sliders */
+input[type="range"] {
+  height: 18px;
+  cursor: pointer;
+}
+
+/* XP Status Bar */
+.status-bar {
+  margin: 0 3px;
+  display: flex;
+  align-items: center;
+}
+
+.status-bar-field {
+  font-size: 11px;
+  color: #000000;
+  padding: 2px 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

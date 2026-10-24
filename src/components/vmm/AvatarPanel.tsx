@@ -2,20 +2,16 @@
 
 import { useMemo, useState } from 'react';
 import {
-  Upload, RotateCcw, Save, AlertCircle, Sparkles, Wand2, Dna, X, Shirt, Wind, Smile,
+  Upload, RotateCcw, Save, AlertCircle, Sparkles, Wand2, Dna, Shirt, Wind, Smile,
   Layers, Search, Eye, EyeOff, ChevronDown, ChevronRight, Boxes, FoldVertical, UnfoldVertical,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Switch } from '@/components/ui/switch';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { LightSlider, StatusPill, type VrmStatus } from './controls';
 import {
   DEFAULT_MTOON, DEFAULT_WIND, FACE_EMOTIONS, matchFaceEmotion,
   type MToonConfig, type ShaderConfig, type ShaderPreset, type WindConfig, type FacePreset,
 } from '@/lib/vrm/constants';
+import { PERFECT_SYNC_CLIP_NAMES } from '@/lib/vmc/vmc';
 import type { VrmMeshItem } from '@/lib/vrm/loadVRM';
 
 const SHADER_PRESETS: { value: ShaderPreset; label: string }[] = [
@@ -41,19 +37,16 @@ const FACE_PRESET_BUTTONS: { value: FacePreset; label: string }[] = [
 
 export function getMeshBaseName(rawName: string): string {
   let name = rawName.trim();
-  // Strip clone, merged, instance, copy patterns
   name = name
     .replace(/[\s_.-]*\(clone\)|\(clone\)/gi, '')
     .replace(/[\s_.-]*\(merged\)|\(merged\)/gi, '')
     .replace(/[\s_.-]*\(instance\)|\(instance\)/gi, '')
     .replace(/[\s_.-]*copy\s*\d*/gi, '');
 
-  // Strip trailing numeric indices: _0, _1, .001, (1), etc.
   name = name
     .replace(/[_\s.-]+\d+$/g, '')
     .replace(/\s*\(\d+\)$/g, '');
 
-  // Strip trailing separators
   name = name.replace(/[_\s.-]+$/g, '').trim();
 
   return name || rawName;
@@ -72,6 +65,7 @@ interface AvatarPanelProps {
   shader: ShaderConfig;
   wind: WindConfig;
   expressionNames: string[];
+  perfectSyncNames?: string[];
   faceWeights: Record<string, number>;
   antiAlias: boolean;
   msaa: boolean;
@@ -94,13 +88,15 @@ interface AvatarPanelProps {
 
 export function AvatarPanel({
   vrmName, vrmStatus, vrmError, mtoon, shader, wind,
-  expressionNames, faceWeights, antiAlias, msaa, meshes = [], meshVisibility = {},
+  expressionNames, perfectSyncNames = [], faceWeights, antiAlias, msaa, meshes = [], meshVisibility = {},
   onToggleMesh, onToggleAllMeshes,
   onMtoonChange, onShaderChange, onWindChange, onPickFile, onResetVRM, onSaveConfig, onClose,
   onFaceWeightChange, onFacePreset, onAntiAliasChange, onMsaaChange,
 }: AvatarPanelProps) {
+  const [activeTab, setActiveTab] = useState<'avatar' | 'meshes' | 'mtoon' | 'effects' | 'face' | 'wind'>('avatar');
   const [meshFilter, setMeshFilter] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [showPerfectSyncSliders, setShowPerfectSyncSliders] = useState(false);
 
   const sortedExpressions = useMemo(() => {
     return [...expressionNames].sort((a, b) => {
@@ -112,7 +108,6 @@ export function AvatarPanel({
     });
   }, [expressionNames]);
 
-  // Group meshes by base common name (e.g. Face, Body, Hair)
   const groupedMeshes = useMemo<MeshGroup[]>(() => {
     const map = new Map<string, VrmMeshItem[]>();
     for (const m of meshes) {
@@ -127,7 +122,6 @@ export function AvatarPanel({
     }));
   }, [meshes]);
 
-  // Filter groups and their child meshes
   const filteredGroups = useMemo<MeshGroup[]>(() => {
     const q = meshFilter.trim().toLowerCase();
     if (!q) return groupedMeshes;
@@ -145,7 +139,6 @@ export function AvatarPanel({
       .filter((g) => g.items.length > 0);
   }, [groupedMeshes, meshFilter]);
 
-  // Default is COLLAPSED: a group is expanded only when its name is in the set.
   const toggleGroupCollapse = (baseName: string) => {
     setExpandedGroups((prev) => ({
       ...prev,
@@ -166,678 +159,717 @@ export function AvatarPanel({
   };
 
   return (
-    <Card className={cn(
-      'w-[440px] max-w-[calc(100vw-2rem)] bg-zinc-900/95 border-zinc-800',
-      'backdrop-blur-md shadow-2xl shadow-black/60 text-zinc-100 overflow-hidden rounded-xl',
-    )}>
-      <CardHeader className="pb-2 pt-3 px-3.5">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="flex items-center justify-center rounded-md w-7 h-7 bg-violet-500/20 text-violet-300 shrink-0">
-              <Shirt className="w-4 h-4" />
-            </span>
-            <div className="min-w-0">
-              <CardTitle className="text-sm font-semibold tracking-wide text-zinc-200">VRM model</CardTitle>
-              <p className="text-[11px] text-zinc-400 truncate" title={vrmName}>{vrmName}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <StatusPill status={vrmStatus} error={vrmError} />
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close VRM model"
-              className="w-7 h-7 rounded-md bg-zinc-800/70 border border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-700 flex items-center justify-center"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
+    <div className="window w-[430px] max-w-[calc(100vw-2rem)]">
+      <div className="title-bar">
+        <div className="title-bar-text">
+          <Shirt className="w-3.5 h-3.5" />
+          <span>VRM Model — {vrmName}</span>
         </div>
+        <div className="title-bar-controls">
+          <button type="button" aria-label="Minimize" />
+          <button type="button" aria-label="Close" onClick={onClose} />
+        </div>
+      </div>
+
+      <div className="window-body space-y-2">
         {vrmError && (
-          <div className="mt-2 text-[11px] text-rose-300 bg-rose-950/40 border border-rose-800/40 rounded-md p-1.5 flex items-start gap-1.5">
+          <div className="text-[11px] text-[#800000] bg-[#ffe6e6] border border-[#b82e2e] p-1.5 flex items-start gap-1.5">
             <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
             <span className="leading-tight">{vrmError}</span>
           </div>
         )}
-      </CardHeader>
 
-      <CardContent className="p-3 pt-0 overflow-hidden">
-        <Tabs defaultValue="avatar" className="w-full">
-          <TabsList className="grid w-full grid-cols-6 bg-zinc-800/60 h-8">
-            <TabsTrigger value="avatar" className="text-[8.5px] uppercase tracking-wider">Model</TabsTrigger>
-            <TabsTrigger value="meshes" className="text-[8.5px] uppercase tracking-wider">Meshes</TabsTrigger>
-            <TabsTrigger value="mtoon" className="text-[8.5px] uppercase tracking-wider">MToon</TabsTrigger>
-            <TabsTrigger value="effects" className="text-[8.5px] uppercase tracking-wider">Effects</TabsTrigger>
-            <TabsTrigger value="face" className="text-[8.5px] uppercase tracking-wider">Face</TabsTrigger>
-            <TabsTrigger value="wind" className="text-[8.5px] uppercase tracking-wider">Wind</TabsTrigger>
-          </TabsList>
+        <menu role="tablist" aria-label="VRM Model Tabs">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'avatar'}
+            onClick={() => setActiveTab('avatar')}
+          >
+            Model
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'meshes'}
+            onClick={() => setActiveTab('meshes')}
+          >
+            Meshes
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'mtoon'}
+            onClick={() => setActiveTab('mtoon')}
+          >
+            MToon
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'effects'}
+            onClick={() => setActiveTab('effects')}
+          >
+            Effects
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'face'}
+            onClick={() => setActiveTab('face')}
+          >
+            Face
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'wind'}
+            onClick={() => setActiveTab('wind')}
+          >
+            Wind
+          </button>
+        </menu>
 
-          {/* TAB 1: MODEL */}
-          <TabsContent value="avatar" className="mt-3 space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={onPickFile}
-                className="bg-violet-600/20 border-violet-500/40 hover:bg-violet-600/40 hover:text-white text-violet-100">
-                <Upload className="w-3.5 h-3.5 mr-1.5" />Open .vrm
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={onResetVRM}
-                className="bg-zinc-800/60 border-zinc-700 hover:bg-zinc-700 hover:text-white text-zinc-200">
-                <RotateCcw className="w-3.5 h-3.5 mr-1.5" />Sample
-              </Button>
-            </div>
+        {/* TAB 1: MODEL */}
+        {activeTab === 'avatar' && (
+          <article role="tabpanel" className="space-y-2.5">
+            <fieldset>
+              <legend>Avatar File</legend>
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={onPickFile}
+                  className="flex items-center justify-center gap-1.5 font-semibold"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Open .vrm…</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onResetVRM}
+                  className="flex items-center justify-center gap-1.5"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Load Sample</span>
+                </button>
+              </div>
 
-            <Button type="button" variant="outline" size="sm" onClick={onSaveConfig}
-              className="w-full bg-emerald-600/20 border-emerald-500/40 hover:bg-emerald-600/40 hover:text-white text-emerald-100">
-              <Save className="w-3.5 h-3.5 mr-1.5" />Save Config &amp; Avatar
-            </Button>
+              <button
+                type="button"
+                onClick={onSaveConfig}
+                className="w-full flex items-center justify-center gap-1.5 font-bold"
+              >
+                <Save className="w-3.5 h-3.5 text-[#005500]" />
+                <span>Save Config &amp; Avatar</span>
+              </button>
+            </fieldset>
 
-            <div className="rounded-lg p-2 bg-zinc-800/30 border border-zinc-800 space-y-1">
-              <p className="text-[11px] text-zinc-400 leading-snug">
-                Drag a <span className="text-zinc-200">.vrm</span> anywhere in the window, or use
-                <span className="text-zinc-200"> Open .vrm</span>.
+            <fieldset>
+              <legend>Tips</legend>
+              <p className="text-[11px] text-[#222222] leading-snug mb-1">
+                Drag a <strong>.vrm</strong> anywhere in the window, or click <strong>Open .vrm…</strong>
               </p>
-              <p className="text-[10px] text-zinc-500 leading-snug">
-                Middle-drag moves the avatar. Ctrl + left-drag rotates it.
-                Both are reset from Camera → Reset view.
+              <p className="text-[10px] text-[#555555] leading-snug">
+                Middle-drag moves the avatar. Ctrl + left-drag rotates it. Both are reset from Camera → Reset view.
               </p>
-            </div>
-          </TabsContent>
+            </fieldset>
+          </article>
+        )}
 
-          {/* TAB 2: MESHES (GROUPED & COLLAPSIBLE PANEL) */}
-          <TabsContent value="meshes" className="mt-3 space-y-2 overflow-hidden">
+        {/* TAB 2: MESHES */}
+        {activeTab === 'meshes' && (
+          <article role="tabpanel" className="space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-200">
-                <Boxes className="w-3.5 h-3.5 text-violet-400" />
+              <div className="flex items-center gap-1.5 font-bold text-[#003399]">
+                <Boxes className="w-3.5 h-3.5" />
                 <span>Meshes ({meshes.length})</span>
                 {groupedMeshes.length > 1 && (
-                  <span className="text-[10px] text-zinc-500">· {groupedMeshes.length} groups</span>
+                  <span className="text-[10px] font-normal text-[#555555]">· {groupedMeshes.length} groups</span>
                 )}
               </div>
               <div className="flex items-center gap-1">
                 {groupedMeshes.some((g) => g.items.length > 1) && (
                   <>
-                    <Button
+                    <button
                       type="button"
-                      variant="ghost"
-                      size="icon"
                       onClick={handleExpandAll}
-                      className="h-6 w-6 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                      className="xp-compact-btn"
                       title="Expand all groups"
                     >
-                      <UnfoldVertical className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button
+                      <UnfoldVertical className="w-3 h-3" />
+                    </button>
+                    <button
                       type="button"
-                      variant="ghost"
-                      size="icon"
                       onClick={handleCollapseAll}
-                      className="h-6 w-6 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                      className="xp-compact-btn"
                       title="Collapse all groups"
                     >
-                      <FoldVertical className="w-3.5 h-3.5" />
-                    </Button>
+                      <FoldVertical className="w-3 h-3" />
+                    </button>
                   </>
                 )}
-                <Button
+                <button
                   type="button"
-                  variant="outline"
-                  size="sm"
                   onClick={() => onToggleAllMeshes?.(true)}
-                  className="h-6 px-2 text-[10px] bg-zinc-800/60 border-zinc-700 hover:bg-zinc-700 text-zinc-300 hover:text-white"
+                  className="xp-compact-btn flex items-center gap-1"
                   title="Show all meshes"
                 >
-                  <Eye className="w-3 h-3 mr-1 text-emerald-400" />
-                  Show all
-                </Button>
-                <Button
+                  <Eye className="w-3 h-3 text-[#005500]" /> Show all
+                </button>
+                <button
                   type="button"
-                  variant="outline"
-                  size="sm"
                   onClick={() => onToggleAllMeshes?.(false)}
-                  className="h-6 px-2 text-[10px] bg-zinc-800/60 border-zinc-700 hover:bg-zinc-700 text-zinc-300 hover:text-white"
+                  className="xp-compact-btn flex items-center gap-1"
                   title="Hide all meshes"
                 >
-                  <EyeOff className="w-3 h-3 mr-1 text-rose-400" />
-                  Hide all
-                </Button>
+                  <EyeOff className="w-3 h-3 text-[#800000]" /> Hide all
+                </button>
               </div>
             </div>
 
             {meshes.length > 0 && (
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+              <div className="field-row" data-no-drag>
+                <Search className="w-3.5 h-3.5 text-[#555555] shrink-0" />
                 <input
                   type="text"
                   placeholder="Filter meshes (e.g. Face, Body, Hair)..."
                   value={meshFilter}
                   onChange={(e) => setMeshFilter(e.target.value)}
-                  className="w-full h-7 pl-8 pr-2.5 rounded-md bg-zinc-800/60 border border-zinc-700 text-[11px] text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-violet-500"
+                  className="w-full"
                 />
               </div>
             )}
 
-            <ScrollArea className="h-[340px] max-h-[340px] w-full overflow-hidden pr-2">
+            <div className="max-h-[300px] overflow-y-auto border border-[#7f9db9] bg-white p-1.5 space-y-1.5" data-no-drag>
               {meshes.length === 0 ? (
-                <div className="p-4 text-center text-xs text-zinc-500 bg-zinc-800/30 rounded-lg border border-zinc-800">
+                <div className="p-3 text-center text-[#555555]">
                   Load a VRM avatar to view and toggle its individual meshes.
                 </div>
               ) : filteredGroups.length === 0 ? (
-                <div className="p-4 text-center text-xs text-zinc-500 bg-zinc-800/30 rounded-lg border border-zinc-800">
+                <div className="p-3 text-center text-[#555555]">
                   No meshes matching &quot;{meshFilter}&quot;
                 </div>
               ) : (
-                <div className="space-y-2 pr-0.5 pb-2">
-                  {filteredGroups.map((group) => {
-                    const isGroupOfOne = group.items.length === 1;
+                filteredGroups.map((group) => {
+                  const isGroupOfOne = group.items.length === 1;
 
-                    // If single mesh, render a clean direct item row
-                    if (isGroupOfOne) {
-                      const mesh = group.items[0];
-                      const isVisible = meshVisibility[mesh.id] !== false;
-                      return (
-                        <div
-                          key={mesh.id}
-                          className={cn(
-                            'flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-xs transition-colors',
-                            isVisible
-                              ? 'bg-zinc-800/40 border-zinc-700/60 text-zinc-200'
-                              : 'bg-zinc-900/60 border-zinc-800/80 text-zinc-500 opacity-60'
-                          )}
-                        >
-                          <div className="flex items-center gap-2 min-w-0 mr-2">
-                            <Layers className={cn('w-3.5 h-3.5 shrink-0', isVisible ? 'text-violet-400' : 'text-zinc-600')} />
-                            <span className="truncate font-mono text-[11px]" title={mesh.name}>
-                              {mesh.name}
-                            </span>
-                          </div>
-                          <Switch
-                            checked={isVisible}
-                            onCheckedChange={(checked) => onToggleMesh?.(mesh.id, checked)}
-                            aria-label={`Toggle ${mesh.name}`}
-                          />
-                        </div>
-                      );
-                    }
-
-                    // Multiple meshes in this group -> Render Collapsible Group
-                    const isExpanded = !!expandedGroups[group.baseName];
-                    const isCollapsed = !isExpanded;
-                    const visibleCount = group.items.filter((m) => meshVisibility[m.id] !== false).length;
-                    const allVisible = visibleCount === group.items.length;
-                    const someVisible = visibleCount > 0;
-
+                  if (isGroupOfOne) {
+                    const mesh = group.items[0];
+                    const isVisible = meshVisibility[mesh.id] !== false;
+                    const chkId = `mesh-chk-${mesh.id}`;
                     return (
                       <div
-                        key={group.baseName}
-                        className="rounded-lg border border-zinc-800/90 bg-zinc-900/50 overflow-hidden transition-all shadow-sm"
-                      >
-                        {/* Group Header */}
-                        <div
-                          onClick={() => toggleGroupCollapse(group.baseName)}
-                          className={cn(
-                            'flex items-center justify-between px-2.5 py-1.5 cursor-pointer select-none transition-colors',
-                            someVisible
-                              ? 'bg-zinc-800/50 hover:bg-zinc-800/75 text-zinc-200'
-                              : 'bg-zinc-900/70 hover:bg-zinc-800/40 text-zinc-400 opacity-70'
-                          )}
-                        >
-                          <div className="flex items-center gap-2 min-w-0 mr-2">
-                            <button
-                              type="button"
-                              className="p-0.5 text-zinc-400 hover:text-zinc-100 transition-transform"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleGroupCollapse(group.baseName);
-                              }}
-                              aria-label={isCollapsed ? 'Expand group' : 'Collapse group'}
-                            >
-                              {isCollapsed ? (
-                                <ChevronRight className="w-3.5 h-3.5 text-zinc-400" />
-                              ) : (
-                                <ChevronDown className="w-3.5 h-3.5 text-violet-400" />
-                              )}
-                            </button>
-
-                            <Boxes className={cn('w-3.5 h-3.5 shrink-0', someVisible ? 'text-violet-400' : 'text-zinc-500')} />
-
-                            <span className="font-semibold text-xs truncate text-zinc-100" title={group.baseName}>
-                              {group.baseName}
-                            </span>
-
-                            <span className={cn(
-                              'text-[10px] font-mono px-1.5 py-0.2 rounded-full border shrink-0',
-                              allVisible
-                                ? 'bg-violet-500/15 border-violet-500/30 text-violet-300'
-                                : someVisible
-                                  ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
-                                  : 'bg-zinc-800 border-zinc-700 text-zinc-500'
-                            )}>
-                              {visibleCount}/{group.items.length}
-                            </span>
-                          </div>
-
-                          {/* Group Master Switch */}
-                          <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                            <Switch
-                              checked={allVisible}
-                              onCheckedChange={(checked) => {
-                                for (const item of group.items) {
-                                  onToggleMesh?.(item.id, checked);
-                                }
-                              }}
-                              aria-label={`Toggle all meshes in ${group.baseName}`}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Collapsible Sub-items */}
-                        {!isCollapsed && (
-                          <div className="px-2 py-1.5 space-y-1 bg-zinc-950/40 border-t border-zinc-800/70">
-                            {group.items.map((mesh) => {
-                              const isItemVisible = meshVisibility[mesh.id] !== false;
-                              return (
-                                <div
-                                  key={mesh.id}
-                                  className={cn(
-                                    'flex items-center justify-between pl-3 pr-2 py-1 rounded border text-[11px] transition-colors',
-                                    isItemVisible
-                                      ? 'bg-zinc-800/35 border-zinc-700/50 text-zinc-300'
-                                      : 'bg-zinc-900/40 border-zinc-800/60 text-zinc-500 opacity-60'
-                                  )}
-                                >
-                                  <div className="flex items-center gap-1.5 min-w-0 mr-2">
-                                    <Layers className={cn('w-3 h-3 shrink-0', isItemVisible ? 'text-violet-400/80' : 'text-zinc-600')} />
-                                    <span className="truncate font-mono text-[10.5px]" title={mesh.name}>
-                                      {mesh.name}
-                                    </span>
-                                  </div>
-                                  <Switch
-                                    className="scale-90"
-                                    checked={isItemVisible}
-                                    onCheckedChange={(checked) => onToggleMesh?.(mesh.id, checked)}
-                                    aria-label={`Toggle ${mesh.name}`}
-                                  />
-                                </div>
-                              );
-                            })}
-                          </div>
+                        key={mesh.id}
+                        className={cn(
+                          'flex items-center justify-between px-2 py-1 border',
+                          isVisible ? 'bg-[#f7f6f0] border-[#d0d0bf]' : 'bg-[#ece9d8] border-[#c0c0b0] opacity-70',
                         )}
+                      >
+                        <div className="field-row min-w-0 flex-1">
+                          <input
+                            id={chkId}
+                            type="checkbox"
+                            checked={isVisible}
+                            onChange={(e) => onToggleMesh?.(mesh.id, e.target.checked)}
+                          />
+                          <label htmlFor={chkId} className="truncate font-mono text-[11px] cursor-pointer" title={mesh.name}>
+                            {mesh.name}
+                          </label>
+                        </div>
                       </div>
                     );
-                  })}
-                </div>
-              )}
-            </ScrollArea>
-          </TabsContent>
+                  }
 
-          {/* TAB 3: MTOON */}
-          <TabsContent value="mtoon" className="mt-3 space-y-2">
-            <ScrollArea className="h-[360px] max-h-[360px] w-full overflow-hidden pr-2">
-              <div className="space-y-2 pr-0.5">
-                <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
-                      <Dna className="w-3.5 h-3.5 text-emerald-300" />MToon look
+                  const isExpanded = !!expandedGroups[group.baseName];
+                  const isCollapsed = !isExpanded;
+                  const visibleCount = group.items.filter((m) => meshVisibility[m.id] !== false).length;
+                  const allVisible = visibleCount === group.items.length;
+                  const grpChkId = `grp-chk-${group.baseName}`;
+
+                  return (
+                    <div key={group.baseName} className="border border-[#919b9c] bg-[#f4f3ee]">
+                      <div
+                        onClick={() => toggleGroupCollapse(group.baseName)}
+                        className="flex items-center justify-between px-2 py-1 cursor-pointer select-none bg-[#ece9d8] hover:bg-[#e2dfd0]"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {isCollapsed ? (
+                            <ChevronRight className="w-3.5 h-3.5 text-[#333333]" />
+                          ) : (
+                            <ChevronDown className="w-3.5 h-3.5 text-[#003399]" />
+                          )}
+                          <Boxes className="w-3.5 h-3.5 text-[#003399] shrink-0" />
+                          <span className="font-bold truncate text-[#000000]" title={group.baseName}>
+                            {group.baseName}
+                          </span>
+                          <span className="text-[10px] font-mono px-1 bg-white border border-[#7f9db9] text-[#003399]">
+                            {visibleCount}/{group.items.length}
+                          </span>
+                        </div>
+
+                        <div className="field-row shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            id={grpChkId}
+                            type="checkbox"
+                            checked={allVisible}
+                            onChange={(e) => {
+                              for (const item of group.items) {
+                                onToggleMesh?.(item.id, e.target.checked);
+                              }
+                            }}
+                          />
+                          <label htmlFor={grpChkId} className="cursor-pointer text-[10px]">All</label>
+                        </div>
+                      </div>
+
+                      {!isCollapsed && (
+                        <div className="p-1.5 space-y-1 bg-white border-t border-[#d0d0bf]">
+                          {group.items.map((mesh) => {
+                            const isItemVisible = meshVisibility[mesh.id] !== false;
+                            const itemChkId = `mesh-item-${mesh.id}`;
+                            return (
+                              <div
+                                key={mesh.id}
+                                className="flex items-center justify-between pl-3 pr-1.5 py-0.5 border border-[#e4e1d0] bg-[#faf9f5]"
+                              >
+                                <div className="field-row min-w-0 flex-1">
+                                  <input
+                                    id={itemChkId}
+                                    type="checkbox"
+                                    checked={isItemVisible}
+                                    onChange={(e) => onToggleMesh?.(mesh.id, e.target.checked)}
+                                  />
+                                  <label htmlFor={itemChkId} className="truncate font-mono text-[10.5px] cursor-pointer" title={mesh.name}>
+                                    <Layers className="w-3 h-3 mr-1 inline text-[#003399]" />
+                                    {mesh.name}
+                                  </label>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                    <Switch
-                      checked={mtoon.enabled}
-                      onCheckedChange={(v) => onMtoonChange({ ...mtoon, enabled: v })}
+                  );
+                })
+              )}
+            </div>
+          </article>
+        )}
+
+        {/* TAB 3: MTOON */}
+        {activeTab === 'mtoon' && (
+          <article role="tabpanel" className="space-y-2 max-h-[370px] overflow-y-auto">
+            <fieldset>
+              <legend className="flex items-center gap-1">
+                <Dna className="w-3 h-3" /> MToon Shader Look
+              </legend>
+              <div className="field-row mb-2" data-no-drag>
+                <input
+                  id="mtoon-enable-chk"
+                  type="checkbox"
+                  checked={mtoon.enabled}
+                  onChange={(e) => onMtoonChange({ ...mtoon, enabled: e.target.checked })}
+                />
+                <label htmlFor="mtoon-enable-chk" className="font-bold cursor-pointer">
+                  Enable global MToon overrides
+                </label>
+              </div>
+
+              {mtoon.enabled && (
+                <div className="space-y-1.5">
+                  <LightSlider
+                    label="Toon shading"
+                    value={mtoon.toony}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    percent
+                    onChange={(v) => onMtoonChange({ ...mtoon, toony: v })}
+                  />
+                  <LightSlider
+                    label="GI equalization"
+                    value={mtoon.gi}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    percent
+                    onChange={(v) => onMtoonChange({ ...mtoon, gi: v })}
+                  />
+                  <LightSlider
+                    label="Shade shift"
+                    value={mtoon.shadingShift}
+                    min={-1}
+                    max={1}
+                    step={0.01}
+                    onChange={(v) => onMtoonChange({ ...mtoon, shadingShift: v })}
+                  />
+                  <LightSlider
+                    label="Color boost"
+                    value={mtoon.colorBoost}
+                    min={0}
+                    max={2}
+                    step={0.01}
+                    percent
+                    onChange={(v) => onMtoonChange({ ...mtoon, colorBoost: v })}
+                  />
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <LightSlider
+                      label="Rim light"
+                      value={mtoon.rim}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      percent
+                      onChange={(v) => onMtoonChange({ ...mtoon, rim: v })}
+                    />
+                    <LightSlider
+                      label="Rim power"
+                      value={mtoon.rimPower}
+                      min={1}
+                      max={8}
+                      step={0.1}
+                      onChange={(v) => onMtoonChange({ ...mtoon, rimPower: v })}
                     />
                   </div>
+                  <div className="flex items-center justify-between pt-1" data-no-drag>
+                    <span className="text-[11px]">Rim color</span>
+                    <input
+                      type="color"
+                      value={mtoon.rimColor}
+                      onChange={(e) => onMtoonChange({ ...mtoon, rimColor: e.target.value })}
+                      className="h-5 w-10 border border-[#7f9db9] bg-transparent cursor-pointer"
+                      aria-label="Rim color"
+                    />
+                  </div>
+                </div>
+              )}
 
-                  {mtoon.enabled && (
-                    <>
-                      <LightSlider
-                        label="Toon shading"
-                        value={mtoon.toony}
-                        min={0}
-                        max={1}
-                        step={0.01}
-                        percent
-                        onChange={(v) => onMtoonChange({ ...mtoon, toony: v })}
-                      />
-                      <LightSlider
-                        label="GI equalization"
-                        value={mtoon.gi}
-                        min={0}
-                        max={1}
-                        step={0.01}
-                        percent
-                        onChange={(v) => onMtoonChange({ ...mtoon, gi: v })}
-                      />
-                      <LightSlider
-                        label="Shade shift"
-                        value={mtoon.shadingShift}
-                        min={-1}
-                        max={1}
-                        step={0.01}
-                        onChange={(v) => onMtoonChange({ ...mtoon, shadingShift: v })}
-                      />
-                      <LightSlider
-                        label="Color boost"
-                        value={mtoon.colorBoost}
-                        min={0}
-                        max={2}
-                        step={0.01}
-                        percent
-                        onChange={(v) => onMtoonChange({ ...mtoon, colorBoost: v })}
-                      />
-                      <div className="grid grid-cols-2 gap-2 pt-1">
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => onMtoonChange({ ...DEFAULT_MTOON })}
+                >
+                  Recommended
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onMtoonChange({ ...mtoon, enabled: false })}
+                  className="flex items-center justify-center gap-1"
+                >
+                  <RotateCcw className="w-3 h-3" /> Model values
+                </button>
+              </div>
+            </fieldset>
+          </article>
+        )}
+
+        {/* TAB 4: EFFECTS */}
+        {activeTab === 'effects' && (
+          <article role="tabpanel" className="space-y-2 max-h-[370px] overflow-y-auto">
+            <fieldset>
+              <legend>Effects (Multi-Select)</legend>
+              <div className="grid grid-cols-4 gap-1">
+                {SHADER_PRESETS.map((p) => {
+                  const isSelected = p.value === 'off' ? shader.effects.length === 0 : shader.effects.includes(p.value);
+                  return (
+                    <button
+                      key={p.value}
+                      type="button"
+                      onClick={() => {
+                        if (p.value === 'off') {
+                          onShaderChange({ ...shader, effects: [] });
+                          return;
+                        }
+                        const isActive = shader.effects.includes(p.value);
+                        const effects = isActive
+                          ? shader.effects.filter((e) => e !== p.value)
+                          : [...shader.effects, p.value];
+                        onShaderChange({
+                          ...shader,
+                          effects,
+                          intensity: Math.max(shader.intensity, 0.05),
+                        });
+                      }}
+                      className={cn(
+                        'xp-compact-btn text-[10px]',
+                        isSelected && 'active font-bold text-[#003399]',
+                      )}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend className="flex items-center gap-1">
+                <Sparkles className="w-3 h-3" /> Effect Parameters
+              </legend>
+              <div className="flex items-center justify-between mb-1" data-no-drag>
+                <span className="text-[11px]">Tint / Glow Color</span>
+                <input
+                  type="color"
+                  value={shader.color}
+                  onChange={(e) => onShaderChange({ ...shader, color: e.target.value })}
+                  className="h-5 w-10 border border-[#7f9db9] bg-transparent cursor-pointer"
+                  aria-label="Effect color"
+                />
+              </div>
+              <LightSlider
+                label={shader.effects.length === 1 && shader.effects.includes('outline') ? 'Outline width' : 'Intensity'}
+                value={shader.intensity}
+                min={0}
+                max={1}
+                step={0.05}
+                onChange={(v) => onShaderChange({ ...shader, intensity: v })}
+              />
+              {(shader.effects.includes('hologram') || shader.effects.includes('scanline')) && (
+                <LightSlider
+                  label="Scanline density"
+                  value={shader.scanline}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  onChange={(v) => onShaderChange({ ...shader, scanline: v })}
+                />
+              )}
+              {shader.effects.includes('dissolve') && (
+                <LightSlider
+                  label="Dissolve"
+                  value={shader.dissolve}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  onChange={(v) => onShaderChange({ ...shader, dissolve: v })}
+                />
+              )}
+            </fieldset>
+
+            <fieldset>
+              <legend className="flex items-center gap-1">
+                <Wand2 className="w-3 h-3" /> HDR Bloom
+              </legend>
+              <LightSlider
+                label="Strength"
+                value={shader.bloom}
+                min={0}
+                max={2}
+                step={0.05}
+                onChange={(v) => onShaderChange({ ...shader, bloom: v })}
+              />
+              <LightSlider
+                label="Radius"
+                value={shader.bloomRadius}
+                min={0}
+                max={1}
+                step={0.01}
+                onChange={(v) => onShaderChange({ ...shader, bloomRadius: v })}
+              />
+              <LightSlider
+                label="Threshold"
+                value={shader.bloomThreshold}
+                min={0}
+                max={3}
+                step={0.05}
+                onChange={(v) => onShaderChange({ ...shader, bloomThreshold: v })}
+              />
+            </fieldset>
+
+            <fieldset>
+              <legend>Antialiasing</legend>
+              <div className="field-row" data-no-drag>
+                <input
+                  id="fxaa-chk"
+                  type="checkbox"
+                  checked={antiAlias}
+                  onChange={(e) => onAntiAliasChange(e.target.checked)}
+                />
+                <label htmlFor="fxaa-chk" className="cursor-pointer">FXAA (Post-process AA)</label>
+              </div>
+              <div className="field-row mt-1" data-no-drag>
+                <input
+                  id="msaa-chk"
+                  type="checkbox"
+                  checked={msaa}
+                  onChange={(e) => onMsaaChange(e.target.checked)}
+                />
+                <label htmlFor="msaa-chk" className="cursor-pointer">MSAA 4x (Multisampling)</label>
+              </div>
+            </fieldset>
+          </article>
+        )}
+
+        {/* TAB 5: FACE */}
+        {activeTab === 'face' && (
+          <article role="tabpanel" className="space-y-2 max-h-[370px] overflow-y-auto">
+            <fieldset>
+              <legend className="flex items-center gap-1">
+                <Smile className="w-3 h-3" /> Emotion Presets
+              </legend>
+              <div className="grid grid-cols-2 gap-1.5">
+                {FACE_PRESET_BUTTONS.map((p) => (
+                  <button
+                    key={p.value}
+                    type="button"
+                    onClick={() => onFacePreset(p.value)}
+                    className="xp-compact-btn"
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>BlendShape Sliders</legend>
+              {sortedExpressions.length === 0 ? (
+                <p className="text-[11px] text-[#555555]">
+                  Load a VRM model to list its expressions.
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  {sortedExpressions.map((name) => (
+                    <LightSlider
+                      key={name}
+                      label={name.charAt(0).toUpperCase() + name.slice(1)}
+                      value={faceWeights[name] ?? 0}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      percent
+                      onChange={(v) => onFaceWeightChange(name, v)}
+                    />
+                  ))}
+                </div>
+              )}
+            </fieldset>
+
+            {/* Perfect Sync (52 ARKit BlendShapeClips) section */}
+            <fieldset>
+              <legend className="flex items-center gap-1">
+                <Sparkles className="w-3 h-3" /> Perfect Sync (ARKit 52) — {perfectSyncNames.length}/{PERFECT_SYNC_CLIP_NAMES.length} clips
+              </legend>
+
+              {perfectSyncNames.length === 0 ? (
+                <p className="text-[10px] text-[#555555] leading-snug">
+                  This VRM has no native ARKit Perfect Sync clips (setup via HANA_Tool / Unity). External tracking will use standard VRM fallback.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPerfectSyncSliders((v) => !v)}
+                    className="w-full flex items-center justify-center gap-1"
+                  >
+                    {showPerfectSyncSliders ? (
+                      <>
+                        <ChevronDown className="w-3.5 h-3.5" /> Hide 52 ARKit Sliders
+                      </>
+                    ) : (
+                      <>
+                        <ChevronRight className="w-3.5 h-3.5" /> Show {perfectSyncNames.length} ARKit Sliders
+                      </>
+                    )}
+                  </button>
+
+                  {showPerfectSyncSliders && (
+                    <div className="p-1.5 border border-[#7f9db9] bg-white max-h-[200px] overflow-y-auto space-y-1.5">
+                      {perfectSyncNames.map((name) => (
                         <LightSlider
-                          label="Rim light"
-                          value={mtoon.rim}
+                          key={name}
+                          label={name}
+                          value={faceWeights[name] ?? 0}
                           min={0}
                           max={1}
                           step={0.01}
                           percent
-                          onChange={(v) => onMtoonChange({ ...mtoon, rim: v })}
+                          onChange={(v) => onFaceWeightChange(name, v)}
                         />
-                        <LightSlider
-                          label="Rim power"
-                          value={mtoon.rimPower}
-                          min={1}
-                          max={8}
-                          step={0.1}
-                          onChange={(v) => onMtoonChange({ ...mtoon, rimPower: v })}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-zinc-400">Rim color</span>
-                        <input
-                          type="color"
-                          value={mtoon.rimColor}
-                          onChange={(e) => onMtoonChange({ ...mtoon, rimColor: e.target.value })}
-                          className="h-6 w-10 rounded border border-zinc-700 bg-transparent cursor-pointer"
-                          aria-label="Rim color"
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  <p className="text-[10px] text-zinc-500 leading-snug">
-                    Applied to every MToon material. Color textures are read as sRGB and materials
-                    do not tone map twice, so skin and fabric keep their source colors.
-                  </p>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onMtoonChange({ ...DEFAULT_MTOON })}
-                      className="h-7 bg-zinc-800/60 border-zinc-700 hover:bg-zinc-700 hover:text-white text-zinc-200 text-[10px]"
-                    >
-                      Recommended
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onMtoonChange({ ...mtoon, enabled: false })}
-                      className="h-7 bg-zinc-800/60 border-zinc-700 hover:bg-zinc-700 hover:text-white text-zinc-200 text-[10px]"
-                    >
-                      <RotateCcw className="w-3 h-3 mr-1" />Model values
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </ScrollArea>
-          </TabsContent>
-
-          {/* TAB 4: EFFECTS */}
-          <TabsContent value="effects" className="mt-3 space-y-2">
-            <ScrollArea className="h-[360px] max-h-[360px] w-full overflow-hidden pr-2">
-              <div className="space-y-2 pr-0.5">
-                <div className="space-y-1.5">
-                  <span className="text-[10px] uppercase tracking-wider text-zinc-500">Effects (multi)</span>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {SHADER_PRESETS.map((p) => (
-                      <button
-                        key={p.value}
-                        type="button"
-                        onClick={() => {
-                          if (p.value === 'off') {
-                            onShaderChange({ ...shader, effects: [] });
-                            return;
-                          }
-                          const isActive = shader.effects.includes(p.value);
-                          const effects = isActive
-                            ? shader.effects.filter((e) => e !== p.value)
-                            : [...shader.effects, p.value];
-                          onShaderChange({
-                            ...shader,
-                            effects,
-                            intensity: Math.max(shader.intensity, 0.05),
-                          });
-                        }}
-                        className={cn(
-                          'text-[10px] py-1.5 rounded-md border transition-colors',
-                          (p.value === 'off' ? shader.effects.length === 0 : shader.effects.includes(p.value))
-                            ? 'bg-violet-600/30 border-violet-500/50 text-violet-100'
-                            : 'bg-zinc-800/40 border-zinc-700/60 text-zinc-400 hover:bg-zinc-700/50 hover:text-zinc-200',
-                        )}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-[10px] text-zinc-500 leading-snug">
-                    Tap several effects to combine them. Off clears all.
-                  </p>
-                </div>
-
-                <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
-                      <Sparkles className="w-3.5 h-3.5 text-violet-300" />Effect
+                      ))}
                     </div>
-                    <input
-                      type="color"
-                      value={shader.color}
-                      onChange={(e) => onShaderChange({ ...shader, color: e.target.value })}
-                      className="h-6 w-10 rounded border border-zinc-700 bg-transparent cursor-pointer"
-                      aria-label="Effect color"
-                    />
-                  </div>
-                  <LightSlider
-                    label={shader.effects.length === 1 && shader.effects.includes('outline') ? 'Outline width' : 'Intensity'}
-                    value={shader.intensity}
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    onChange={(v) => onShaderChange({ ...shader, intensity: v })}
-                  />
-                  {(shader.effects.includes('hologram') || shader.effects.includes('scanline')) && (
-                    <LightSlider
-                      label="Scanline density"
-                      value={shader.scanline}
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      onChange={(v) => onShaderChange({ ...shader, scanline: v })}
-                    />
-                  )}
-                  {shader.effects.includes('dissolve') && (
-                    <LightSlider
-                      label="Dissolve"
-                      value={shader.dissolve}
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      onChange={(v) => onShaderChange({ ...shader, dissolve: v })}
-                    />
                   )}
                 </div>
+              )}
+            </fieldset>
+          </article>
+        )}
 
-                <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
-                  <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
-                    <Wand2 className="w-3.5 h-3.5 text-amber-300" />Bloom
-                  </div>
+        {/* TAB 6: WIND */}
+        {activeTab === 'wind' && (
+          <article role="tabpanel" className="space-y-2">
+            <fieldset>
+              <legend className="flex items-center gap-1">
+                <Wind className="w-3 h-3" /> Spring-Bone Wind Breeze
+              </legend>
+              <div className="field-row mb-2" data-no-drag>
+                <input
+                  id="wind-enable-chk"
+                  type="checkbox"
+                  checked={wind.enabled}
+                  onChange={(e) => onWindChange({ ...wind, enabled: e.target.checked })}
+                />
+                <label htmlFor="wind-enable-chk" className="font-bold cursor-pointer">
+                  Enable Wind Physics
+                </label>
+              </div>
+
+              {wind.enabled && (
+                <div className="space-y-1.5">
                   <LightSlider
                     label="Strength"
-                    value={shader.bloom}
-                    min={0}
-                    max={2}
-                    step={0.05}
-                    onChange={(v) => onShaderChange({ ...shader, bloom: v })}
-                  />
-                  <LightSlider
-                    label="Radius"
-                    value={shader.bloomRadius}
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    onChange={(v) => onShaderChange({ ...shader, bloomRadius: v })}
-                  />
-                  <LightSlider
-                    label="Threshold"
-                    value={shader.bloomThreshold}
+                    value={wind.strength}
                     min={0}
                     max={3}
                     step={0.05}
-                    onChange={(v) => onShaderChange({ ...shader, bloomThreshold: v })}
+                    onChange={(v) => onWindChange({ ...wind, strength: v })}
+                  />
+                  <LightSlider
+                    label="Direction"
+                    value={wind.direction}
+                    min={0}
+                    max={360}
+                    step={1}
+                    unit="°"
+                    onChange={(v) => onWindChange({ ...wind, direction: v })}
+                  />
+                  <LightSlider
+                    label="Gusts"
+                    value={wind.gusts}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    percent
+                    onChange={(v) => onWindChange({ ...wind, gusts: v })}
                   />
                 </div>
+              )}
 
-                <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
-                  <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
-                    <Sparkles className="w-3.5 h-3.5 text-sky-300" />Antialiasing
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-[11px] text-zinc-200">FXAA</p>
-                      <p className="text-[10px] text-zinc-500 leading-tight">
-                        Post-process AA. Smooths effect edges and scanlines cheaply.
-                      </p>
-                    </div>
-                    <Switch checked={antiAlias} onCheckedChange={onAntiAliasChange} />
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-[11px] text-zinc-200">MSAA 4x</p>
-                      <p className="text-[10px] text-zinc-500 leading-tight">
-                        Multisampling on the render targets. Crisper geometry edges.
-                      </p>
-                    </div>
-                    <Switch checked={msaa} onCheckedChange={onMsaaChange} />
-                  </div>
-                </div>
-              </div>
-            </ScrollArea>
-          </TabsContent>
+              <p className="text-[10px] text-[#555555] leading-snug my-2">
+                Breeze on hair, skirt and ribbons, driven by the VRM spring bones.
+                Direction is world-space (0° = right, 90° = away from camera).
+              </p>
 
-          {/* TAB 5: FACE */}
-          <TabsContent value="face" className="mt-3 space-y-2">
-            <ScrollArea className="h-[360px] max-h-[360px] w-full overflow-hidden pr-2">
-              <div className="space-y-2 pr-0.5">
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-zinc-500">
-                    <Smile className="w-3 h-3" />Blend shapes
-                  </div>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {FACE_PRESET_BUTTONS.map((p) => (
-                      <button
-                        key={p.value}
-                        type="button"
-                        onClick={() => onFacePreset(p.value)}
-                        className="text-[10px] py-1.5 rounded-md border bg-zinc-800/40 border-zinc-700/60 text-zinc-400 hover:bg-zinc-700/50 hover:text-zinc-200 transition-colors"
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+              <button
+                type="button"
+                onClick={() => onWindChange({ ...DEFAULT_WIND, enabled: wind.enabled })}
+                className="w-full flex items-center justify-center gap-1"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Reset wind
+              </button>
+            </fieldset>
+          </article>
+        )}
+      </div>
 
-                {sortedExpressions.length === 0 ? (
-                  <p className="text-[11px] text-zinc-500 leading-snug rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
-                    Load a VRM model to list its expressions.
-                  </p>
-                ) : (
-                  <div className="space-y-2.5 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
-                    {sortedExpressions.map((name) => (
-                      <LightSlider
-                        key={name}
-                        label={name.charAt(0).toUpperCase() + name.slice(1)}
-                        value={faceWeights[name] ?? 0}
-                        min={0}
-                        max={1}
-                        step={0.01}
-                        percent
-                        onChange={(v) => onFaceWeightChange(name, v)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
-          </TabsContent>
-
-          {/* TAB 6: WIND */}
-          <TabsContent value="wind" className="mt-3 space-y-2">
-            <ScrollArea className="h-[360px] max-h-[360px] w-full overflow-hidden pr-2">
-              <div className="space-y-2 pr-0.5">
-                <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs font-medium text-zinc-200">
-                      <Wind className="w-3.5 h-3.5 text-cyan-300" />Wind
-                    </div>
-                    <Switch
-                      checked={wind.enabled}
-                      onCheckedChange={(v) => onWindChange({ ...wind, enabled: v })}
-                    />
-                  </div>
-
-                  {wind.enabled && (
-                    <>
-                      <LightSlider
-                        label="Strength"
-                        value={wind.strength}
-                        min={0}
-                        max={3}
-                        step={0.05}
-                        onChange={(v) => onWindChange({ ...wind, strength: v })}
-                      />
-                      <LightSlider
-                        label="Direction"
-                        value={wind.direction}
-                        min={0}
-                        max={360}
-                        step={1}
-                        unit="°"
-                        onChange={(v) => onWindChange({ ...wind, direction: v })}
-                      />
-                      <LightSlider
-                        label="Gusts"
-                        value={wind.gusts}
-                        min={0}
-                        max={1}
-                        step={0.05}
-                        percent
-                        onChange={(v) => onWindChange({ ...wind, gusts: v })}
-                      />
-                    </>
-                  )}
-
-                  <p className="text-[10px] text-zinc-500 leading-snug">
-                    Breeze on hair, skirt and ribbons, driven by the VRM spring bones.
-                    It needs Physics quality Medium/High in the optimization panel.
-                    Direction is world-space (0° = right, 90° = away from camera).
-                  </p>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onWindChange({ ...DEFAULT_WIND, enabled: wind.enabled })}
-                    className="w-full h-7 bg-zinc-800/60 border-zinc-700 hover:bg-zinc-700 hover:text-white text-zinc-200"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5 mr-1.5" />Reset wind
-                  </Button>
-                </div>
-              </div>
-            </ScrollArea>
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+      <div className="status-bar">
+        <p className="status-bar-field">
+          <StatusPill status={vrmStatus} error={vrmError} />
+        </p>
+        <p className="status-bar-field">Meshes: {meshes.length}</p>
+        <p className="status-bar-field">ARKit: {perfectSyncNames.length}/{PERFECT_SYNC_CLIP_NAMES.length}</p>
+      </div>
+    </div>
   );
 }

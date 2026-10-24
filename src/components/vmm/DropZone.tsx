@@ -2,7 +2,6 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { Upload, FileBox } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface DropZoneProps {
@@ -52,67 +51,59 @@ export function DropZone({ visible, overlay, onFile, className }: DropZoneProps)
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       className={cn(
-        'flex flex-col items-center justify-center text-center transition-all',
-        'border-2 border-dashed rounded-xl',
+        'window transition-all',
         visible ? 'opacity-100' : 'opacity-0 pointer-events-none',
-        isDragging
-          ? 'border-violet-400 bg-violet-500/10'
-          : 'border-zinc-700 bg-zinc-900/40 backdrop-blur-sm',
-        overlay ? 'p-8 max-w-md mx-auto' : 'p-12 w-full h-full',
+        overlay ? 'max-w-md mx-auto' : 'w-full max-w-md mx-auto',
         className
       )}
     >
-      <div
-        className={cn(
-          'flex items-center justify-center rounded-full mb-4',
-          'bg-violet-500/15 text-violet-300',
-          overlay ? 'w-10 h-10' : 'w-16 h-16'
-        )}
-      >
-        {overlay ? (
-          <Upload className="w-5 h-5" />
-        ) : (
-          <FileBox className="w-8 h-8" />
-        )}
+      <div className="title-bar">
+        <div className="title-bar-text">
+          <FileBox className="w-3.5 h-3.5" />
+          <span>{overlay ? 'Replace VRM Avatar' : 'Open VRM Avatar'}</span>
+        </div>
+        <div className="title-bar-controls">
+          <button type="button" aria-label="Help" />
+        </div>
       </div>
 
-      <h3
-        className={cn(
-          'font-semibold text-zinc-100',
-          overlay ? 'text-base' : 'text-xl mb-2'
-        )}
-      >
-        {overlay ? 'Drop to replace avatar' : 'Drop a .vrm file here'}
-      </h3>
-
-      {!overlay && (
-        <p className="text-sm text-zinc-400 mb-6 max-w-sm">
-          Drag-and-drop a VRM 0.x or VRM 1.0 file, or pick one from disk.
-          Everything runs locally in your browser.
-        </p>
-      )}
-
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".vrm"
-        className="hidden"
-        onChange={(e) => {
-          handleFiles(e.target.files);
-          e.target.value = '';
-        }}
-      />
-
-      <Button
-        type="button"
-        variant="default"
-        size={overlay ? 'sm' : 'default'}
-        onClick={() => inputRef.current?.click()}
-        className="bg-violet-600 hover:bg-violet-500 text-white"
-      >
-        <Upload className="w-4 h-4 mr-2" />
-        Choose .vrm file
-      </Button>
+      <div className="window-body text-center space-y-3 p-3">
+        <fieldset className={cn(isDragging && 'bg-[#e1ecff] border-[#0050ee]')}>
+          <legend>VRM Model File (.vrm)</legend>
+          <div className="flex flex-col items-center justify-center py-4 space-y-2">
+            <Upload className="w-7 h-7 text-[#003399]" />
+            <div className="font-bold text-[12px] text-[#000000]">
+              {overlay ? 'Drop to replace avatar' : 'Drop a .vrm file here'}
+            </div>
+            {!overlay && (
+              <p className="text-[11px] text-[#444444] max-w-xs">
+                Drag-and-drop a VRM 0.x or VRM 1.0 file, or pick one from disk.
+                Everything runs locally.
+              </p>
+            )}
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".vrm"
+              className="hidden"
+              onChange={(e) => {
+                handleFiles(e.target.files);
+                e.target.value = '';
+              }}
+            />
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => inputRef.current?.click()}
+                className="inline-flex items-center gap-1.5 font-semibold"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Browse .vrm…</span>
+              </button>
+            </div>
+          </div>
+        </fieldset>
+      </div>
     </div>
   );
 }
