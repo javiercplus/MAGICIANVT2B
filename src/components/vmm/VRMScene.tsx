@@ -47,6 +47,7 @@ interface VRMSceneProps {
   zoom: number;
   fov: number;
   orthographic: boolean;
+  meshVisibility?: Record<string, boolean>;
   onZoomChange?: (z: number) => void;
   onTelemetry?: (t: Telemetry) => void;
   onLoaded?: (result: LoadVRMResult) => void;
@@ -253,7 +254,7 @@ export function VRMScene(props: VRMSceneProps) {
     gazeDesiredRef, gazeCurrentRef, mouthValueRef, avatarOffsetRef, faceWeights, rotationRef, cameraHomeRef,
     greenScreen = false, chromaColor = GREEN_SCREEN.COLOR, backgroundImageUrl = null,
     lighting, adjust, shader, optimization, mtoon, wind,
-    zoom, fov, orthographic, onZoomChange,
+    zoom, fov, orthographic, meshVisibility, onZoomChange,
     onTelemetry, onLoaded, onError,
   } = props;
 
@@ -311,6 +312,7 @@ export function VRMScene(props: VRMSceneProps) {
         gazeDesiredRef={gazeDesiredRef} gazeCurrentRef={gazeCurrentRef}
         mouthValueRef={mouthValueRef} avatarOffsetRef={avatarOffsetRef}
         faceWeights={faceWeights}
+        meshVisibility={meshVisibility}
         onLoaded={onLoaded} onError={onError}
       />
 
@@ -323,6 +325,7 @@ export function VRMScene(props: VRMSceneProps) {
         renderScale={optimization.renderScale}
         pixelRatio={optimization.pixelRatio}
         antiAlias={optimization.antiAlias}
+        msaa={optimization.msaa}
       />
 
       <RendererColorSettings adjust={adjust} />

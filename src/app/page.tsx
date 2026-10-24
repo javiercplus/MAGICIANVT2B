@@ -21,7 +21,7 @@ import { useScreenRecording } from '@/hooks/useScreenRecording';
 import { useAvatarDrag } from '@/hooks/useAvatarDrag';
 import { cn } from '@/lib/utils';
 import { DEFAULT_LIGHTING, DEFAULT_ADJUST, DEFAULT_SHADER, DEFAULT_OPTIMIZATION, DEFAULT_WIND, DEFAULT_MTOON, matchFaceEmotion, CAMERA, GREEN_SCREEN, ZOOM, type LightingConfig, type AdjustConfig, type ShaderConfig, type OptimizationConfig, type Telemetry, type WindConfig, type MToonConfig, type CameraHome, type FacePreset, type ShaderPreset } from '@/lib/vrm/constants';
-import type { LoadVRMResult } from '@/lib/vrm/loadVRM';
+import type { LoadVRMResult, VrmMeshItem } from '@/lib/vrm/loadVRM';
 import { saveVrmToIndexedDB, loadVrmFromIndexedDB, saveConfig, loadConfig } from '@/lib/storage';
 
 type VrmStatus = 'idle' | 'loading' | 'loaded' | 'error';
@@ -74,6 +74,8 @@ export default function Page() {
   const [wind, setWind] = useState<WindConfig>(DEFAULT_WIND);
   const [expressionNames, setExpressionNames] = useState<string[]>([]);
   const [faceWeights, setFaceWeights] = useState<Record<string, number>>({});
+  const [meshes, setMeshes] = useState<VrmMeshItem[]>([]);
+  const [meshVisibility, setMeshVisibility] = useState<Record<string, boolean>>({});
   const [fov, setFov] = useState<number>(CAMERA.FOV_DEFAULT);
   const [orthographic, setOrthographic] = useState(false);
   const [telemetry, setTelemetry] = useState<Telemetry>({ fps: 0, textures: 0, calls: 0, geometries: 0 });
@@ -248,6 +250,15 @@ export default function Page() {
         authors: result.meta.authors ? [...result.meta.authors] : undefined,
       });
     }
+    // Meshes extraction and initial visibility
+    const modelMeshes = result.meshes ?? [];
+    setMeshes(modelMeshes);
+    const initialVis: Record<string, boolean> = {};
+    for (const m of modelMeshes) {
+      initialVis[m.id] = m.visible;
+    }
+    setMeshVisibility(initialVis);
+
     // Face tab only exposes emotion/state blend shapes (no vowels/blink/look).
     const allNames = (result.vrm.expressionManager?.expressions ?? []).map((e) => e.expressionName);
     const emotionNames = allNames.filter((n) => matchFaceEmotion(n) !== null);
@@ -268,6 +279,20 @@ export default function Page() {
   const handleFaceWeightChange = useCallback((name: string, value: number) => {
     setFaceWeights((prev) => ({ ...prev, [name]: value }));
   }, []);
+
+  const handleToggleMesh = useCallback((id: string, visible: boolean) => {
+    setMeshVisibility((prev) => ({ ...prev, [id]: visible }));
+  }, []);
+
+  const handleToggleAllMeshes = useCallback((visible: boolean) => {
+    setMeshVisibility((prev) => {
+      const next = { ...prev };
+      for (const m of meshes) {
+        next[m.id] = visible;
+      }
+      return next;
+    });
+  }, [meshes]);
 
   const handleFacePreset = useCallback((preset: FacePreset) => {
     setFaceWeights(() => {
@@ -393,6 +418,7 @@ export default function Page() {
             zoom={zoom}
             fov={fov}
             orthographic={orthographic}
+            meshVisibility={meshVisibility}
             onZoomChange={setZoom}
             onTelemetry={optPanelOpen ? setTelemetry : undefined}
             onLoaded={handleLoaded} onError={handleError}
@@ -483,6 +509,11 @@ export default function Page() {
               onMtoonChange={setMtoon} onShaderChange={setShader}
               wind={wind} onWindChange={setWind}
               expressionNames={expressionNames} faceWeights={faceWeights}
+              antiAlias={optimization.antiAlias} msaa={optimization.msaa}
+              onAntiAliasChange={(v) => setOptimization((o) => ({ ...o, antiAlias: v }))}
+              onMsaaChange={(v) => setOptimization((o) => ({ ...o, msaa: v }))}
+              meshes={meshes} meshVisibility={meshVisibility}
+              onToggleMesh={handleToggleMesh} onToggleAllMeshes={handleToggleAllMeshes}
               onFaceWeightChange={handleFaceWeightChange} onFacePreset={handleFacePreset}
               onPickFile={handlePickFile} onResetVRM={handleResetVRM}
               onSaveConfig={handleSaveConfig}

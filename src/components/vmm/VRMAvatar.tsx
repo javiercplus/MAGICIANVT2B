@@ -40,6 +40,7 @@ interface VRMAvatarProps {
   mouthValueRef: React.RefObject<number>;
   avatarOffsetRef: React.RefObject<THREE.Vector3>;
   faceWeights: Record<string, number>;
+  meshVisibility?: Record<string, boolean>;
   onLoaded?: (result: LoadVRMResult) => void;
   onError?: (err: Error) => void;
 }
@@ -48,7 +49,7 @@ export function VRMAvatar(props: VRMAvatarProps) {
   const {
     vrmUrl, gazeEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity,
     shaderConfig, optimization, mtoon, wind, rotationRef, cameraHomeRef,
-    gazeDesiredRef, gazeCurrentRef, mouthValueRef, avatarOffsetRef, faceWeights,
+    gazeDesiredRef, gazeCurrentRef, mouthValueRef, avatarOffsetRef, faceWeights, meshVisibility,
     onLoaded, onError,
   } = props;
 
@@ -157,6 +158,18 @@ export function VRMAvatar(props: VRMAvatarProps) {
       spineBoneRef.current = null;
     };
   }, [vrmUrl]);
+
+  // Mesh Visibility: apply mesh toggles from the Meshes panel live.
+  useEffect(() => {
+    const vrm = vrmRef.current;
+    if (!vrm || !meshVisibility) return;
+    vrm.scene.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (mesh.isMesh && meshVisibility[mesh.uuid] !== undefined) {
+        mesh.visible = meshVisibility[mesh.uuid];
+      }
+    });
+  }, [meshVisibility]);
 
   // VRM Boost: swap MToon <-> MeshLambertMaterial live, without reloading.
   useEffect(() => {
