@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import type { VRM } from '@pixiv/three-vrm';
+import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm';
 import { GAZE, STAND_POSE, type GazeTarget } from './constants';
+import { ALL_VRM_BONES } from '@/lib/vmc/vmc';
 
 // Port of HeadIkIntegrator.OnMouseMove, adapted for the web.
 // Web screen Y is inverted from Unity (top=0). We keep gaze convention:
@@ -132,4 +133,20 @@ export function applyStandPose(vrm: VRM): void {
     const raw = humanoid.getRawBoneNode(name);
     if (raw) raw.quaternion.setFromEuler(new THREE.Euler(x, 0, z, 'XYZ'));
   }
+}
+
+// Fully resets all humanoid bones (head, spine, hips, legs, arms, fingers) to
+// default neutral orientation, followed by the natural arm stand pose.
+export function resetAllBonesToDefault(vrm: VRM): void {
+  const humanoid = vrm.humanoid;
+  if (!humanoid) return;
+
+  for (const boneName of ALL_VRM_BONES) {
+    const norm = humanoid.getNormalizedBoneNode(boneName);
+    if (norm) norm.quaternion.set(0, 0, 0, 1);
+    const raw = humanoid.getRawBoneNode(boneName);
+    if (raw) raw.quaternion.set(0, 0, 0, 1);
+  }
+
+  applyStandPose(vrm);
 }

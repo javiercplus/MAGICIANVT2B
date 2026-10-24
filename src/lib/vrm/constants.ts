@@ -215,6 +215,7 @@ export interface OptimizationConfig {
   fpsLimit: number;        // 15..60 (render loop cap)
   renderScale: number;     // 0.25..1 internal render-target resolution
   antiAlias: boolean;      // FXAA post-process (compensates low renderScale)
+  msaa: boolean;           // 4x MSAA on the post-processing render targets
   pixelRatio: number;      // 0.5..1.5 renderer.setPixelRatio
   physicsQuality: PhysicsQuality;
   morphOptimization: boolean;
@@ -225,6 +226,7 @@ export const DEFAULT_OPTIMIZATION: OptimizationConfig = {
   fpsLimit: 60,
   renderScale: 1,
   antiAlias: false,
+  msaa: true,
   pixelRatio: 1,
   physicsQuality: 'high',
   morphOptimization: false,

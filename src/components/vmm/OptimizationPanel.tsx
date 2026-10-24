@@ -168,6 +168,13 @@ export function OptimizationPanel({ config, telemetry, onChange, onClose }: Opti
                 onCheckedChange={(v) => set('antiAlias', v)}
                 accentClass="bg-sky-500/20 text-sky-300"
               />
+              <SwitchRow
+                label="MSAA 4x"
+                description="Multisampling on the post-processing render targets. Crisper edges, small GPU cost."
+                checked={config.msaa}
+                onCheckedChange={(v) => set('msaa', v)}
+                accentClass="bg-emerald-500/20 text-emerald-300"
+              />
             </div>
 
             <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">

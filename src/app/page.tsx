@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Loader2, Gauge, Shirt } from 'lucide-react';
+import { Loader2, Gauge, Shirt, Radio } from 'lucide-react';
 import { VRMScene } from '@/components/vmm/VRMScene';
 import { ControlPanel } from '@/components/vmm/ControlPanel';
 import { AvatarPanel } from '@/components/vmm/AvatarPanel';
 import { DraggablePanel } from '@/components/vmm/DraggablePanel';
 import { OptimizationPanel } from '@/components/vmm/OptimizationPanel';
+import { VmcPanel } from '@/components/vmm/VmcPanel';
 import { Button } from '@/components/ui/button';
 import { Header } from '@/components/vmm/Header';
 import { DropZone } from '@/components/vmm/DropZone';
@@ -21,7 +22,8 @@ import { useScreenRecording } from '@/hooks/useScreenRecording';
 import { useAvatarDrag } from '@/hooks/useAvatarDrag';
 import { cn } from '@/lib/utils';
 import { DEFAULT_LIGHTING, DEFAULT_ADJUST, DEFAULT_SHADER, DEFAULT_OPTIMIZATION, DEFAULT_WIND, DEFAULT_MTOON, matchFaceEmotion, CAMERA, GREEN_SCREEN, ZOOM, type LightingConfig, type AdjustConfig, type ShaderConfig, type OptimizationConfig, type Telemetry, type WindConfig, type MToonConfig, type CameraHome, type FacePreset, type ShaderPreset } from '@/lib/vrm/constants';
-import type { LoadVRMResult } from '@/lib/vrm/loadVRM';
+import { DEFAULT_VMC_CONFIG, type VmcConfig } from '@/lib/vmc/vmc';
+import type { LoadVRMResult, VrmMeshItem } from '@/lib/vrm/loadVRM';
 import { saveVrmToIndexedDB, loadVrmFromIndexedDB, saveConfig, loadConfig } from '@/lib/storage';
 
 type VrmStatus = 'idle' | 'loading' | 'loaded' | 'error';
@@ -72,13 +74,17 @@ export default function Page() {
   const [optimization, setOptimization] = useState<OptimizationConfig>(DEFAULT_OPTIMIZATION);
   const [mtoon, setMtoon] = useState<MToonConfig>(DEFAULT_MTOON);
   const [wind, setWind] = useState<WindConfig>(DEFAULT_WIND);
+  const [vmcConfig, setVmcConfig] = useState<VmcConfig>(DEFAULT_VMC_CONFIG);
   const [expressionNames, setExpressionNames] = useState<string[]>([]);
   const [faceWeights, setFaceWeights] = useState<Record<string, number>>({});
+  const [meshes, setMeshes] = useState<VrmMeshItem[]>([]);
+  const [meshVisibility, setMeshVisibility] = useState<Record<string, boolean>>({});
   const [fov, setFov] = useState<number>(CAMERA.FOV_DEFAULT);
   const [orthographic, setOrthographic] = useState(false);
   const [telemetry, setTelemetry] = useState<Telemetry>({ fps: 0, textures: 0, calls: 0, geometries: 0 });
   const [optPanelOpen, setOptPanelOpen] = useState(false);
   const [avatarPanelOpen, setAvatarPanelOpen] = useState(true);
+  const [vmcPanelOpen, setVmcPanelOpen] = useState(false);
   const [zoom, setZoom] = useState<number>(ZOOM.DEFAULT);
 
   const [isDragging, setIsDragging] = useState(false);
@@ -94,6 +100,15 @@ export default function Page() {
   const bgInputRef = useRef<HTMLInputElement>(null);
   const prevBlobUrlRef = useRef<string | null>(null);
   const prevBgUrlRef = useRef<string | null>(null);
+
+  // When VMC Receive is turned off, reset the view/position in the app to default
+  const prevVmcRecvEnabledRef = useRef(vmcConfig.receive.enabled);
+  useEffect(() => {
+    if (prevVmcRecvEnabledRef.current && !vmcConfig.receive.enabled) {
+      resetView();
+    }
+    prevVmcRecvEnabledRef.current = vmcConfig.receive.enabled;
+  }, [vmcConfig.receive.enabled, resetView]);
 
   useEffect(() => {
     if (!gazeEnabled && captureOutside) {
@@ -141,8 +156,6 @@ export default function Page() {
           setAdjust({
             ...DEFAULT_ADJUST,
             ...a,
-            // Old configs only had brightness/saturation/contrast; keep any
-            // missing color controls neutral.
             brightness: typeof a.brightness === 'number' ? a.brightness : 1,
             saturation: typeof a.saturation === 'number' ? a.saturation : 1,
             contrast: typeof a.contrast === 'number' ? a.contrast : 1,
@@ -153,16 +166,12 @@ export default function Page() {
         const s = config.shader;
         if (s && typeof s === 'object') {
           const merged = { ...DEFAULT_SHADER, ...s };
-          // Migrate old single-effect config (`preset`) to the new multi-select
-          // `effects` array.
           if (!Array.isArray(merged.effects)) {
             const legacyPreset = (s as { preset?: string }).preset;
             merged.effects = legacyPreset && legacyPreset !== 'off'
               ? [legacyPreset as ShaderPreset]
               : [];
           }
-          // Old configs used a low bloom threshold that made white and the
-          // custom background glow. Bump them to the new emissive-only range.
           if (typeof merged.bloomThreshold === 'number' && merged.bloomThreshold < 1) {
             merged.bloomThreshold = DEFAULT_SHADER.bloomThreshold;
           }
@@ -186,6 +195,12 @@ export default function Page() {
         if (w && typeof w === 'object') {
           setWind({ ...DEFAULT_WIND, ...w });
         }
+      }
+      if (config.vmc !== undefined && config.vmc && typeof config.vmc === 'object') {
+        setVmcConfig({
+          receive: { ...DEFAULT_VMC_CONFIG.receive, ...(config.vmc.receive ?? {}) },
+          send: { ...DEFAULT_VMC_CONFIG.send, ...(config.vmc.send ?? {}) },
+        });
       }
       if (typeof config.fov === 'number') {
         setFov(Math.min(Math.max(config.fov, CAMERA.FOV_MIN), CAMERA.FOV_MAX));
@@ -248,12 +263,20 @@ export default function Page() {
         authors: result.meta.authors ? [...result.meta.authors] : undefined,
       });
     }
+
+    // Meshes extraction and initial visibility
+    const modelMeshes = result.meshes ?? [];
+    setMeshes(modelMeshes);
+    const initialVis: Record<string, boolean> = {};
+    for (const m of modelMeshes) {
+      initialVis[m.id] = m.visible;
+    }
+    setMeshVisibility(initialVis);
+
     // Face tab only exposes emotion/state blend shapes (no vowels/blink/look).
     const allNames = (result.vrm.expressionManager?.expressions ?? []).map((e) => e.expressionName);
     const emotionNames = allNames.filter((n) => matchFaceEmotion(n) !== null);
     setExpressionNames(emotionNames);
-    // Neutral starts at 100% when the model has a neutral state; otherwise the
-    // base face (all weights 0) is already neutral.
     const neutralName = pickExpressionForPreset(emotionNames, 'neutral');
     const initial: Record<string, number> = {};
     for (const name of emotionNames) initial[name] = name === neutralName ? 1 : 0;
@@ -269,10 +292,22 @@ export default function Page() {
     setFaceWeights((prev) => ({ ...prev, [name]: value }));
   }, []);
 
+  const handleToggleMesh = useCallback((id: string, visible: boolean) => {
+    setMeshVisibility((prev) => ({ ...prev, [id]: visible }));
+  }, []);
+
+  const handleToggleAllMeshes = useCallback((visible: boolean) => {
+    setMeshVisibility((prev) => {
+      const next = { ...prev };
+      for (const m of meshes) {
+        next[m.id] = visible;
+      }
+      return next;
+    });
+  }, [meshes]);
+
   const handleFacePreset = useCallback((preset: FacePreset) => {
     setFaceWeights(() => {
-      // Exclusive state: exactly one expression at 100%, all others at 0.
-      // This avoids stacking emotions (which used to open the mouth more).
       let target = pickExpressionForPreset(expressionNames, preset);
       if (!target && preset === 'fun') {
         target = pickExpressionForPreset(expressionNames, 'happy');
@@ -338,7 +373,6 @@ export default function Page() {
 
   const handleGlobalTrackingToggle = useCallback((v: boolean) => {
     setGlobalTracking(v);
-    // Global tracking works everywhere, so pointer lock is redundant.
     if (v && captureOutside) {
       setCaptureOutside(false);
       if (document.pointerLockElement) document.exitPointerLock();
@@ -347,7 +381,7 @@ export default function Page() {
 
   const handleSaveConfig = useCallback(async () => {
     saveConfig({
-      gazeEnabled, captureOutside, globalTracking, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, chromaColor, lighting, adjust, shader, optimization, mtoon, wind, fov, orthographic, zoom
+      gazeEnabled, captureOutside, globalTracking, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, chromaColor, lighting, adjust, shader, optimization, mtoon, wind, vmc: vmcConfig, fov, orthographic, zoom
     });
     if (vrmUrl && vrmUrl !== DEFAULT_VRM_URL) {
       try {
@@ -358,8 +392,9 @@ export default function Page() {
         console.error('Failed to save VRM blob', e);
       }
     }
-  }, [gazeEnabled, captureOutside, globalTracking, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, chromaColor, lighting, adjust, shader, optimization, mtoon, wind, fov, orthographic, zoom, vrmUrl, vrmName]);
+  }, [gazeEnabled, captureOutside, globalTracking, micEnabled, autoBlinkEnabled, randomEyesEnabled, randomEyesIntensity, idleSwayEnabled, idleSwayIntensity, greenScreen, chromaColor, lighting, adjust, shader, optimization, mtoon, wind, vmcConfig, fov, orthographic, zoom, vrmUrl, vrmName]);
 
+  const vmcActive = vmcConfig.receive.enabled || vmcConfig.send.enabled;
   const displayVrmName = meta?.name || vrmName;
   const headerStatus = vrmStatus === 'loaded'
     ? (micEnabled ? (micReady ? 'Avatar · Mic live' : 'Avatar · Mic starting…') : 'Avatar ready')
@@ -393,6 +428,8 @@ export default function Page() {
             zoom={zoom}
             fov={fov}
             orthographic={orthographic}
+            vmcConfig={vmcConfig}
+            meshVisibility={meshVisibility}
             onZoomChange={setZoom}
             onTelemetry={optPanelOpen ? setTelemetry : undefined}
             onLoaded={handleLoaded} onError={handleError}
@@ -424,13 +461,27 @@ export default function Page() {
               size="icon"
               variant="outline"
               onClick={() => setAvatarPanelOpen((v) => !v)}
-              title="VRM model (model, MToon, effects)"
+              title="VRM model (model, meshes, MToon, effects)"
               className={cn(
                 'h-9 w-9 bg-zinc-900/85 border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800',
                 avatarPanelOpen && 'text-violet-300 border-violet-500/50',
               )}
             >
               <Shirt className="w-4 h-4" />
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              onClick={() => setVmcPanelOpen((v) => !v)}
+              title="VMC Protocol (Receiving & Sending settings)"
+              className={cn(
+                'h-9 w-9 bg-zinc-900/85 border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800',
+                vmcActive && 'text-emerald-300 border-emerald-500/50',
+                !vmcActive && vmcPanelOpen && 'text-violet-300 border-violet-500/50',
+              )}
+            >
+              <Radio className="w-4 h-4" />
             </Button>
           </div>
           <HideControlsButton
@@ -454,14 +505,29 @@ export default function Page() {
           </div>
         </div>
 
-        {optPanelOpen && (
+        {vmcPanelOpen && !controlsHidden && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40">
-            <OptimizationPanel
-              config={optimization}
-              telemetry={telemetry}
-              onChange={setOptimization}
-              onClose={() => setOptPanelOpen(false)}
-            />
+            <DraggablePanel>
+              <VmcPanel
+                config={vmcConfig}
+                onChange={setVmcConfig}
+                onResetAvatar={resetView}
+                onClose={() => setVmcPanelOpen(false)}
+              />
+            </DraggablePanel>
+          </div>
+        )}
+
+        {optPanelOpen && !controlsHidden && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40">
+            <DraggablePanel>
+              <OptimizationPanel
+                config={optimization}
+                telemetry={telemetry}
+                onChange={setOptimization}
+                onClose={() => setOptPanelOpen(false)}
+              />
+            </DraggablePanel>
           </div>
         )}
 
@@ -483,6 +549,11 @@ export default function Page() {
               onMtoonChange={setMtoon} onShaderChange={setShader}
               wind={wind} onWindChange={setWind}
               expressionNames={expressionNames} faceWeights={faceWeights}
+              antiAlias={optimization.antiAlias} msaa={optimization.msaa}
+              onAntiAliasChange={(v) => setOptimization((o) => ({ ...o, antiAlias: v }))}
+              onMsaaChange={(v) => setOptimization((o) => ({ ...o, msaa: v }))}
+              meshes={meshes} meshVisibility={meshVisibility}
+              onToggleMesh={handleToggleMesh} onToggleAllMeshes={handleToggleAllMeshes}
               onFaceWeightChange={handleFaceWeightChange} onFacePreset={handleFacePreset}
               onPickFile={handlePickFile} onResetVRM={handleResetVRM}
               onSaveConfig={handleSaveConfig}

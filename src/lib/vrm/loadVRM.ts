@@ -4,9 +4,16 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils, type VRM } from '@pixiv/three-vrm';
 
+export interface VrmMeshItem {
+  id: string;
+  name: string;
+  visible: boolean;
+}
+
 export interface LoadVRMResult {
   scene: THREE.Group;
   vrm: VRM;
+  meshes: VrmMeshItem[];
   meta?: {
     name?: string;
     authors?: readonly string[];
@@ -62,6 +69,18 @@ function extractResult(gltf: any): LoadVRMResult {
   if (!vrm) throw new Error('Loaded glTF has no VRM data. Is this a .vrm file?');
   applyVRMSetup(vrm);
 
+  const meshes: VrmMeshItem[] = [];
+  vrm.scene.traverse((obj: THREE.Object3D) => {
+    const mesh = obj as THREE.Mesh;
+    if (mesh.isMesh) {
+      meshes.push({
+        id: mesh.uuid,
+        name: mesh.name || `Mesh_${meshes.length + 1}`,
+        visible: mesh.visible !== false,
+      });
+    }
+  });
+
   const meta: LoadVRMResult['meta'] = {};
   try {
     const m = (vrm as any).meta;
@@ -74,7 +93,7 @@ function extractResult(gltf: any): LoadVRMResult {
     }
   } catch {}
 
-  return { scene: vrm.scene, vrm, meta };
+  return { scene: vrm.scene, vrm, meshes, meta };
 }
 
 export async function loadVRMFromUrl(url: string): Promise<LoadVRMResult> {

@@ -70,7 +70,12 @@ const FRAGMENT_EFFECT = /* glsl */ `
 
     if (uHologramOn > 0.5) {
       // Hologram: animated scanlines + fresnel rim + flicker.
-      float scan = 0.5 + 0.5 * sin((gl_FragCoord.y + uTime * 220.0) * uScanDensity);
+      // fwidth() fades the scanline contrast when the pattern is under-sampled
+      // (high density / small on screen) to avoid moiré and shimmering.
+      float phase = (gl_FragCoord.y + uTime * 220.0) * uScanDensity;
+      float scanWidth = fwidth(phase) + 1e-5;
+      float scan = 0.5 + 0.5 * sin(phase);
+      scan = mix(0.5, scan, clamp(1.0 - scanWidth * 1.25, 0.0, 1.0));
       float flicker = 0.85 + 0.15 * sin(uTime * 42.0);
       vec3 holo = tint * (0.30 + 0.70 * scan) * flicker + tint * fres * 1.25;
       fx = mix(fx, holo, uIntensity);
@@ -93,9 +98,12 @@ const FRAGMENT_EFFECT = /* glsl */ `
     }
 
     if (uScanlineOn > 0.5) {
-      // Scanline overlay across the whole model.
-      float scan = 0.5 + 0.5 * sin(gl_FragCoord.y * uScanDensity * 6.2831);
-      fx = mix(fx, fx * 0.4 + tint * scan * 0.6, uIntensity);
+      // Scanline overlay across the whole model (fwidth anti-aliased).
+      float phase2 = gl_FragCoord.y * uScanDensity * 6.2831;
+      float scanWidth2 = fwidth(phase2) + 1e-5;
+      float scan2 = 0.5 + 0.5 * sin(phase2);
+      scan2 = mix(0.5, scan2, clamp(1.0 - scanWidth2 * 1.25, 0.0, 1.0));
+      fx = mix(fx, fx * 0.4 + tint * scan2 * 0.6, uIntensity);
     }
 
     fxCol = fx;

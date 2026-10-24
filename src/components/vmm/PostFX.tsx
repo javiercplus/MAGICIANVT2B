@@ -22,6 +22,7 @@ export interface PostFXProps extends Pick<AdjustConfig, 'brightness' | 'saturati
   renderScale: number;
   pixelRatio: number;
   antiAlias: boolean;
+  msaa: boolean;
 }
 
 // Runs AFTER OutputPass, so it works on display-referred (sRGB) pixels. That
@@ -133,7 +134,7 @@ export function PostFX({
   brightness, saturation, contrast, hue, temperature,
   bloomStrength = 0, bloomRadius = 0.4, bloomThreshold = 1.1,
   shader,
-  fpsLimit, renderScale, pixelRatio, antiAlias,
+  fpsLimit, renderScale, pixelRatio, antiAlias, msaa,
 }: PostFXProps) {
   const { gl, scene, camera, size } = useThree();
   const composerRef = useRef<EffectComposer | null>(null);
@@ -144,7 +145,14 @@ export function PostFX({
   const accumRef = useRef(0);
 
   useEffect(() => {
-    const composer = new EffectComposer(gl);
+    // MSAA on the composer's internal render targets. The canvas `antialias`
+    // flag does nothing once post-processing renders to an offscreen target, so
+    // effect/geometry edges need MSAA here. Configurable in the Effects tab.
+    const target = new THREE.WebGLRenderTarget(1, 1, {
+      type: THREE.HalfFloatType,
+      samples: msaa ? 4 : 0,
+    });
+    const composer = new EffectComposer(gl, target);
     composer.addPass(new RenderPass(scene, camera));
 
     // Bloom works on the linear HDR scene, before tone mapping.
@@ -202,7 +210,7 @@ export function PostFX({
       bloomRef.current = null;
       fxaaRef.current = null;
     };
-  }, [gl, scene, camera]);
+  }, [gl, scene, camera, msaa]);
 
   // Resize / render-scale / pixel-ratio. NOTE: renderScale only shrinks the
   // composer's internal WebGLRenderTargets; the canvas CSS size is untouched,
@@ -249,7 +257,9 @@ export function PostFX({
   }, [shader.effects, shader.intensity]);
 
   useEffect(() => {
-    if (fxaaRef.current) fxaaRef.current.enabled = antiAlias;
+    if (fxaaRef.current) {
+      fxaaRef.current.enabled = antiAlias;
+    }
   }, [antiAlias]);
 
   useFrame((_, delta) => {

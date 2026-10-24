@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const dgram = require('dgram');
 const { spawn } = require('child_process');
 const { pathToFileURL } = require('url');
 
@@ -252,7 +253,154 @@ function setupGlobalCursor() {
       const pos = readGlobalCursor(sender);
       if (pos) sender.send('gaze:cursor', pos);
     }, 16);
-    timers.set(sender.id, timer);
+     timers.set(sender.id, timer);
+  });
+}
+
+// === VMC Protocol (OSC over UDP) ============================================
+// Supports both Sending (Performer -> Marionette) and Receiving (Marionette <- Performer)
+// on independent UDP sockets and configurable ports/addresses.
+function decodeOscAddress(buf) {
+  let addr = '';
+  for (let i = 0; i < buf.length; i++) {
+    const c = buf[i];
+    if (c === 0) break;
+    addr += String.fromCharCode(c);
+  }
+  return addr;
+}
+
+function setupVmc() {
+  const sendSocket = dgram.createSocket('udp4');
+  let sendEnabled = false;
+  let sendHost = '127.0.0.1';
+  let sendPort = 39539;
+
+  let receiveSocket = null;
+  let receiveEnabled = false;
+  let receivePort = 39539;
+
+  const debug = process.env.DEBUG_VMC === '1';
+
+  const broadcastReceiveStatus = (status) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) {
+        win.webContents.send('vmc:receive-status', status);
+      }
+    }
+  };
+
+  const stopReceiveSocket = () => {
+    if (receiveSocket) {
+      try {
+        receiveSocket.removeAllListeners();
+        receiveSocket.close();
+      } catch {}
+      receiveSocket = null;
+    }
+  };
+
+  const startReceiveSocket = (port) => {
+    stopReceiveSocket();
+    const sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+    receiveSocket = sock;
+
+    sock.on('error', (err) => {
+      if (debug) console.error('[VMC Receive Error]', err.message);
+      broadcastReceiveStatus({
+        listening: false,
+        port,
+        error: err.message || 'UDP bind error',
+      });
+    });
+
+    sock.on('listening', () => {
+      const addr = sock.address();
+      if (debug) console.log(`[VMC Receive] Listening on ${addr.address}:${addr.port}`);
+      broadcastReceiveStatus({
+        listening: true,
+        port: addr.port,
+        error: null,
+      });
+    });
+
+    sock.on('message', (msg) => {
+      // Copy the bytes: `msg` is a view over a pooled Node Buffer, and sending
+      // a pooled view through IPC can carry the wrong byte range. Uint8Array.from
+      // produces a standalone copy that structured-clone sends reliably.
+      const data = Uint8Array.from(msg);
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) {
+          win.webContents.send('vmc:packet', data);
+        }
+      }
+      if (debug) {
+        console.log(`[VMC Receive] ${data.length} bytes ${decodeOscAddress(data)}`);
+      }
+    });
+
+    try {
+      sock.bind(port, '0.0.0.0');
+    } catch (err) {
+      broadcastReceiveStatus({
+        listening: false,
+        port,
+        error: err.message || 'Failed to bind UDP port',
+      });
+    }
+  };
+
+  // Legacy channel support
+  ipcMain.on('vmc:set-enabled', (_event, value) => {
+    sendEnabled = !!value;
+    if (debug) console.log(`[VMC Send] ${sendEnabled ? 'enabled' : 'disabled'}`);
+  });
+
+  ipcMain.on('vmc:configure-send', (_event, cfg) => {
+    if (!cfg || typeof cfg !== 'object') return;
+    sendEnabled = !!cfg.enabled;
+    if (typeof cfg.host === 'string' && cfg.host.trim()) {
+      sendHost = cfg.host.trim();
+    }
+    const p = Number(cfg.port);
+    if (Number.isInteger(p) && p > 0 && p <= 65535) {
+      sendPort = p;
+    }
+    if (debug) {
+      console.log(`[VMC Send] enabled=${sendEnabled} target=${sendHost}:${sendPort}`);
+    }
+  });
+
+  ipcMain.on('vmc:configure-receive', (_event, cfg) => {
+    if (!cfg || typeof cfg !== 'object') return;
+    const nextEnabled = !!cfg.enabled;
+    const p = Number(cfg.port);
+    const nextPort = Number.isInteger(p) && p > 0 && p <= 65535 ? p : receivePort;
+
+    if (!nextEnabled) {
+      receiveEnabled = false;
+      receivePort = nextPort;
+      stopReceiveSocket();
+      broadcastReceiveStatus({ listening: false, port: receivePort, error: null });
+      return;
+    }
+
+    if (receiveEnabled && receiveSocket && receivePort === nextPort) {
+      return;
+    }
+
+    receiveEnabled = true;
+    receivePort = nextPort;
+    startReceiveSocket(receivePort);
+  });
+
+  ipcMain.on('vmc:send', (_event, buffer) => {
+    if (!sendEnabled || !buffer) return;
+    const buf = Buffer.from(buffer);
+    sendSocket.send(buf, 0, buf.length, sendPort, sendHost, (err) => {
+      if (err && debug) console.error('[VMC Send Error]', err.message);
+    });
+    if (debug) console.log(`[VMC] -> ${sendHost}:${sendPort} ${decodeOscAddress(buf)} (${buf.length} bytes)`);
   });
 }
 
@@ -325,6 +473,7 @@ if (!relaunchedOnX11) {
     registerAppProtocol();
     setupWindowResizing();
     setupGlobalCursor();
+    setupVmc();
     createWindow();
 
     app.on('activate', () => {

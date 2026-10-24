@@ -16,6 +16,7 @@ export interface SavedConfig {
   optimization?: any; // OptimizationConfig
   mtoon?: any; // MToonConfig
   wind?: any; // WindConfig
+  vmc?: any; // VmcConfig
   fov?: number;
   orthographic?: boolean;
   zoom?: number;
