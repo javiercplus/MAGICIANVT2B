@@ -226,7 +226,7 @@ export const DEFAULT_OPTIMIZATION: OptimizationConfig = {
   fpsLimit: 60,
   renderScale: 1,
   antiAlias: false,
-  msaa: true,
+  msaa: false,
   pixelRatio: 1,
   physicsQuality: 'high',
   morphOptimization: false,
