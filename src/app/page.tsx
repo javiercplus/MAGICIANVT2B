@@ -8,7 +8,6 @@ import { ControlPanel } from '@/components/vmm/ControlPanel';
 import { AvatarPanel } from '@/components/vmm/AvatarPanel';
 import { DraggablePanel } from '@/components/vmm/DraggablePanel';
 import { OptimizationPanel } from '@/components/vmm/OptimizationPanel';
-import { Button } from '@/components/ui/button';
 import { Header } from '@/components/vmm/Header';
 import { DropZone } from '@/components/vmm/DropZone';
 import { HideControlsButton } from '@/components/vmm/HideControlsButton';
@@ -21,6 +20,7 @@ import { useScreenRecording } from '@/hooks/useScreenRecording';
 import { useAvatarDrag } from '@/hooks/useAvatarDrag';
 import { cn } from '@/lib/utils';
 import { DEFAULT_LIGHTING, DEFAULT_ADJUST, DEFAULT_SHADER, DEFAULT_OPTIMIZATION, DEFAULT_WIND, DEFAULT_MTOON, matchFaceEmotion, CAMERA, GREEN_SCREEN, ZOOM, type LightingConfig, type AdjustConfig, type ShaderConfig, type OptimizationConfig, type Telemetry, type WindConfig, type MToonConfig, type CameraHome, type FacePreset, type ShaderPreset } from '@/lib/vrm/constants';
+import { isPerfectSyncClipName, PERFECT_SYNC_CLIP_NAMES, resolvePerfectSyncClipName } from '@/lib/vmc/vmc';
 import type { LoadVRMResult, VrmMeshItem } from '@/lib/vrm/loadVRM';
 import { saveVrmToIndexedDB, loadVrmFromIndexedDB, saveConfig, loadConfig } from '@/lib/storage';
 
@@ -73,6 +73,7 @@ export default function Page() {
   const [mtoon, setMtoon] = useState<MToonConfig>(DEFAULT_MTOON);
   const [wind, setWind] = useState<WindConfig>(DEFAULT_WIND);
   const [expressionNames, setExpressionNames] = useState<string[]>([]);
+  const [perfectSyncNames, setPerfectSyncNames] = useState<string[]>([]);
   const [faceWeights, setFaceWeights] = useState<Record<string, number>>({});
   const [meshes, setMeshes] = useState<VrmMeshItem[]>([]);
   const [meshVisibility, setMeshVisibility] = useState<Record<string, boolean>>({});
@@ -259,15 +260,27 @@ export default function Page() {
     }
     setMeshVisibility(initialVis);
 
-    // Face tab only exposes emotion/state blend shapes (no vowels/blink/look).
+    // Face tab exposes emotion/state blend shapes + Perfect Sync 52 ARKit clips (if present on model).
     const allNames = (result.vrm.expressionManager?.expressions ?? []).map((e) => e.expressionName);
     const emotionNames = allNames.filter((n) => matchFaceEmotion(n) !== null);
     setExpressionNames(emotionNames);
-    // Neutral starts at 100% when the model has a neutral state; otherwise the
-    // base face (all weights 0) is already neutral.
+    // Detect 52 ARKit Perfect Sync BlendShapeClips on this VRM model (ordered per VMagicMirror spec)
+    const psOrderMap = new Map<string, number>(
+      PERFECT_SYNC_CLIP_NAMES.map((c, idx) => [c, idx]),
+    );
+    const detectedPs = allNames
+      .filter((n) => isPerfectSyncClipName(n))
+      .sort((a, b) => {
+        const ca = resolvePerfectSyncClipName(a) ?? a;
+        const cb = resolvePerfectSyncClipName(b) ?? b;
+        return (psOrderMap.get(ca) ?? 999) - (psOrderMap.get(cb) ?? 999);
+      });
+    setPerfectSyncNames(detectedPs);
+
     const neutralName = pickExpressionForPreset(emotionNames, 'neutral');
     const initial: Record<string, number> = {};
     for (const name of emotionNames) initial[name] = name === neutralName ? 1 : 0;
+    for (const psName of detectedPs) initial[psName] = 0;
     setFaceWeights(initial);
   }, []);
 
@@ -304,9 +317,10 @@ export default function Page() {
       }
       const next: Record<string, number> = {};
       for (const name of expressionNames) next[name] = name === target ? 1 : 0;
+      for (const psName of perfectSyncNames) next[psName] = 0;
       return next;
     });
-  }, [expressionNames]);
+  }, [expressionNames, perfectSyncNames]);
 
   const handleResetVRM = useCallback(() => {
     if (prevBlobUrlRef.current) {
@@ -427,67 +441,72 @@ export default function Page() {
 
         {vrmStatus === 'loading' && (
           <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
-            <div className="flex flex-col items-center gap-3 bg-zinc-900/60 backdrop-blur-sm rounded-xl px-6 py-4 border border-zinc-800">
-              <Loader2 className="w-6 h-6 text-violet-400 animate-spin" />
-              <p className="text-xs text-zinc-400">Loading VRM…</p>
+            <div className="window w-56">
+              <div className="title-bar">
+                <div className="title-bar-text">Loading VRM Model...</div>
+              </div>
+              <div className="window-body flex flex-col items-center gap-2 py-3">
+                <Loader2 className="w-5 h-5 text-[#003399] animate-spin" />
+                <p className="text-[11px] text-[#222]">Please wait while the avatar loads…</p>
+              </div>
             </div>
           </div>
         )}
 
         {gazeEnabled && captureOutside && !globalTracking && !document.pointerLockElement && (
           <div className="absolute inset-0 z-10 flex items-end justify-center pb-24 pointer-events-none">
-            <div className="bg-violet-900/80 border border-violet-500/50 text-violet-100 text-xs px-3 py-2 rounded-lg backdrop-blur-sm">
-              Click the canvas to engage pointer lock · Press Esc to exit
+            <div className="window">
+              <div className="window-body px-3 py-1.5 text-[11px] text-[#111]">
+                Click the canvas to engage pointer lock · Press <strong>Esc</strong> to exit
+              </div>
             </div>
           </div>
         )}
 
-        <div className="absolute top-4 right-4 z-50 flex flex-col gap-2">
-          <div className={cn('flex flex-col gap-2', controlsHidden && 'hidden')}>
+        <div className="absolute top-4 right-4 z-50 flex flex-col gap-1.5">
+          <div className={cn('flex flex-col gap-1.5', controlsHidden && 'hidden')}>
             <HelpButton />
-            <Button
+            <button
               type="button"
-              size="icon"
-              variant="outline"
               onClick={() => setAvatarPanelOpen((v) => !v)}
               title="VRM model (model, MToon, effects)"
               className={cn(
-                'h-9 w-9 bg-zinc-900/85 border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800',
-                avatarPanelOpen && 'text-violet-300 border-violet-500/50',
+                'xp-icon-btn',
+                avatarPanelOpen && 'font-bold ring-1 ring-[#003399]',
               )}
             >
-              <Shirt className="w-4 h-4" />
-            </Button>
+              <Shirt className={cn('w-4 h-4', avatarPanelOpen ? 'text-[#003399]' : 'text-[#222]')} />
+            </button>
           </div>
           <HideControlsButton
             hidden={controlsHidden}
             onToggle={() => setControlsHidden((v) => !v)}
           />
-          <div className={cn('flex flex-col gap-2', controlsHidden && 'hidden')}>
-            <Button
+          <div className={cn('flex flex-col gap-1.5', controlsHidden && 'hidden')}>
+            <button
               type="button"
-              size="icon"
-              variant="outline"
               onClick={() => setOptPanelOpen((v) => !v)}
               title="Optimization panel"
               className={cn(
-                'h-9 w-9 bg-zinc-900/85 border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800',
-                optPanelOpen && 'text-violet-300 border-violet-500/50',
+                'xp-icon-btn',
+                optPanelOpen && 'font-bold ring-1 ring-[#003399]',
               )}
             >
-              <Gauge className="w-4 h-4" />
-            </Button>
+              <Gauge className={cn('w-4 h-4', optPanelOpen ? 'text-[#003399]' : 'text-[#222]')} />
+            </button>
           </div>
         </div>
 
-        {optPanelOpen && (
+        {optPanelOpen && !controlsHidden && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40">
-            <OptimizationPanel
-              config={optimization}
-              telemetry={telemetry}
-              onChange={setOptimization}
-              onClose={() => setOptPanelOpen(false)}
-            />
+            <DraggablePanel>
+              <OptimizationPanel
+                config={optimization}
+                telemetry={telemetry}
+                onChange={setOptimization}
+                onClose={() => setOptPanelOpen(false)}
+              />
+            </DraggablePanel>
           </div>
         )}
 
@@ -508,7 +527,7 @@ export default function Page() {
               mtoon={mtoon} shader={shader}
               onMtoonChange={setMtoon} onShaderChange={setShader}
               wind={wind} onWindChange={setWind}
-              expressionNames={expressionNames} faceWeights={faceWeights}
+              expressionNames={expressionNames} perfectSyncNames={perfectSyncNames} faceWeights={faceWeights}
               antiAlias={optimization.antiAlias} msaa={optimization.msaa}
               onAntiAliasChange={(v) => setOptimization((o) => ({ ...o, antiAlias: v }))}
               onMsaaChange={(v) => setOptimization((o) => ({ ...o, msaa: v }))}

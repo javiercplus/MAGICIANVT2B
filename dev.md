@@ -1,55 +1,121 @@
 # Developer Documentation (dev.md)
 
-This document details the architecture, internal workings, and code organization of the **MAGICIANVT2B** project to ensure its proper maintenance and portability in the future.
+Architecture, rendering pipeline and module breakdown for **MAGICIANVT2B** (Electron + Next.js + React Three Fiber + `@pixiv/three-vrm`).
 
-## General Architecture
+## General architecture
 
-The application is built on top of **Next.js** using the `App Router`. All source code is hosted within the `src/` directory.
-It relies on **React Three Fiber (R3F)** along with **Three.js** and the **@pixiv/three-vrm** library for loading, rendering, and manipulating `.vrm` avatars.
+The UI is a **static Next.js export** (`output: "export"` in `next.config.ts`). Electron serves the exported `out/` directory through a custom privileged **`app://`** protocol (absolute asset paths like `/_next/...` would break with plain `file://`). All 3D rendering happens in the renderer; all OS-level work (UDP sockets, window management, global cursor) lives in the Electron main process.
 
-### Directory Structure
+```
+main.js  ── BrowserWindow ──►  Next.js export (renderer / R3F / three-vrm)
+   │  ▲
+   │  └── ipcRenderer (preload.js → window.electronAPI)
+   └── dgram UDP  ──►  VMC (OSC) sender / receiver (Bones + 52 ARKit Perfect Sync)
+```
 
-- `src/app/`: Contains the main entry point (`page.tsx`) and global styles.
-- `src/components/vmm/`: Domain-specific components for VRM avatars (Control UI, Three.js canvas, etc.).
-- `src/components/ui/`: Base graphical interface components generally built with Shadcn UI or similar (buttons, sliders, cards).
-- `src/hooks/`: React logic abstracted into Custom Hooks to facilitate maintenance and reduce component complexity.
-- `src/lib/`: Utilities, constants, and storage logic.
+### Directory structure
 
----
+- `main.js`, `preload.js` — Electron main process and context bridge.
+- `src/app/` — Next.js entry (`page.tsx`), global styles.
+- `src/components/vmm/` — avatar/3D/panel components.
+- `src/components/ui/` — shadcn/ui primitives.
+- `src/hooks/` — browser API logic (gaze, lipsync, drag, recording).
+- `src/lib/vrm/` — VRM loading, gaze math, MToon, wind, material FX, optimization, constants.
+- `src/lib/vmc/` — OSC encoder/decoder, VMC protocol helpers, and 52 ARKit Perfect Sync mapping.
+- `.github/workflows/` — CI (`electron-build.yml`, `vmc-build.yml`).
 
-## Main Modules
+## Electron main process (`main.js`)
 
-### 1. Main Application (`src/app/page.tsx`)
-This is the orchestrator component. Its responsibilities include:
-- **State Management**: Maintains the main state of the application, such as whether the avatar is loaded, the states of the toggles (Gaze, Mic, Auto Blink, etc.), and the lighting setup.
-- **Persistence**: Using `useEffect`, it invokes `loadConfig` and `loadVrmFromIndexedDB` on mount to restore the last saved state and avatar.
-- **Hook Coordination**: Calls screen recording, gaze tracking, and lip sync hooks, passing the necessary references down to the 3D scene.
-- **Drag & Drop**: Manages global event listeners to drag and drop `.vrm` files directly onto the screen.
+- **Chromium switches** (before `app.whenReady()`): `disable-features=CalculateNativeWinOcclusion`, `disable-gpu-vsync`, `enable-accelerated-video-decode`, `js-flags` (heap + `--expose-gc`).
+- **GPU backend**: `resolveGpuBackend()` picks `opengl` (default) or `vulkan` from `MAGICIAN_GPU` env or the packaged `package.json#magicianGpu` (set by `build:electron:vulkan` via `extraMetadata`). Vulkan adds `enable-features=Vulkan`, `use-angle=vulkan`, `enable-unsafe-webgpu`.
+- **Wayland → X11 relaunch** so global cursor reads work (`MAGICIAN_NO_XWAYLAND=1` opts out).
+- **`app://` protocol** serving `out/` (path-traversal guarded).
+- **Frameless window** + custom resize borders and native title bar overlay.
+- **Global cursor IPC** (`gaze:get-global-cursor`, `gaze:set-tracking`, `gaze:cursor`) for gaze tracking outside the window.
+- **VMC UDP** (see below).
 
-### 2. 3D Components (`src/components/vmm/`)
-- **`VRMScene.tsx`**: Contains the React Three Fiber `Canvas`. Sets up the environment (lighting, green screen/chroma background, or custom image). It takes care of instantiating the avatar.
-- **`VRMAvatar.tsx`**: Manages the actual loading of the `.vrm` file using `GLTFLoader`. On every frame (via `useFrame`), it updates the avatar's bone rotations based on gaze, updates mouth blendshapes based on microphone input, and handles random blinking.
+## Preload bridge (`preload.js`)
 
-### 3. Control Panel (`src/components/vmm/ControlPanel.tsx`)
-- Provides the floating UI to manipulate the avatar.
-- Allows opening a new `.vrm`, adjusting lights, changing the background, and toggling features.
-- Calls the `handleSaveConfig` function (passed down via `onSaveConfig`) to save the current settings and the `.vrm` binary to the local database.
+Exposes `window.electronAPI`:
 
-### 4. Custom Hooks (`src/hooks/`)
-Clean separation of browser APIs and logic:
-- **`useGazeTracking`**: Captures mouse movements in the window or through *Pointer Lock* to get normalized coordinates and apply them to the avatar's gaze.
-- **`useLipSync`**: Requests microphone permissions (via `getUserMedia`), connects an `AudioContext` to an `AnalyserNode`, and calculates volume to feed it to the avatar's BlendShapes (expressions).
-- **`useAvatarDrag`**: Allows moving the model in 3D space by dragging with the middle mouse button.
-- **`useScreenRecording`**: Uses the `MediaRecorder` API to record the video stream generated by the canvas, allowing you to export the result.
+- `getGlobalCursor`, `setGlobalTracking`, `onGlobalCursor`
+- `vmcSend`, `vmcConfigureSend`, `vmcConfigureReceive`, `vmcSetEnabled`, `onVmcPacket`, `onVmcReceiveStatus`
 
-### 5. Storage and Utilities (`src/lib/`)
-- **`storage.ts`**: A wrapper that exposes functions to save configurations in `localStorage` and to save large binary files (`Blob` representing the model) into `IndexedDB`.
-- **`vrm/loadVRM.ts`**: A specific utility for processing the GLTF/GLB extracted into a `VRM` object.
+## Renderer entry (`src/app/page.tsx`)
 
----
+Orchestrates state and persistence:
 
-## Maintenance and Portability
-The code was refactored to be 100% portable and avoid unnecessary comments, following "Clean Code" practices. If you need to migrate this project or package it, remember that the primary dependencies are:
-- **Three.js** and **React Three Fiber**.
-- **@pixiv/three-vrm**.
-- Access to storage is entirely local (IndexedDB + localStorage), so it can work perfectly *offline* and without a backend (completely static).
+- Avatar URL/name/status, meta.
+- Tracking: `gazeEnabled`, `captureOutside`, `globalTracking`.
+- Face: `autoBlink`, `randomEyes`, `idleSway`, `faceWeights` (per-expression & Perfect Sync clips), `perfectSyncNames` (detected 52 ARKit clips on loaded model).
+- Scene: `greenScreen`, `chromaColor`, custom `backgroundImageUrl`.
+- Look: `lighting`, `adjust` (color), `mtoon`, `shader` (effects), `wind`.
+- Camera: `zoom`, `fov`, `orthographic`.
+- `optimization` (FPS, render scale, AA, physics, etc.) and `telemetry`.
+- `vmcConfig` (send/receive + Perfect Sync toggles) and panel visibility.
+- Loads config/avatar from `localStorage`/`IndexedDB` and saves on demand.
+
+## 3D scene (`src/components/vmm/`)
+
+### `VRMScene.tsx`
+- R3F `<Canvas>` (`dpr`, ACES tone mapping, exposure).
+- Background: chroma color or custom image.
+- `CameraRig` (zoom/FOV/ortho + wheel zoom + reset view).
+- `RenderSettings` (pixel ratio via `setDpr`), `TelemetryProbe` (500 ms samples), `VmcBridge` (send/receive IPC), `VRMAvatar`, `PostFX`.
+
+### `VRMAvatar.tsx`
+Per frame (`useFrame`):
+1. Applies avatar offset/rotation (or received VMC root).
+2. Local tracking: gaze/random-eyes → head, neck and eye normalized bones (skipped while VMC receive is enabled).
+3. Applies received VMC bone poses (upper body/hands/legs/eyes) with optional smoothing.
+4. Idle sway (skipped while VMC receive is enabled).
+5. Facial expressions: received VMC blendshapes & 52 ARKit Perfect Sync clips (case-insensitive matching + optional fallback to standard VRM expressions) when available, otherwise face weights + lipsync + auto-blink.
+6. `vrm.update(dt)` via `updateVRMSelective` (can skip expressions / throttle spring bones).
+7. Publishes head transform + all expression weights to `vmcState` for sending.
+
+Loading uses `lib/vrm/loadVRM.ts` (VRMLoaderPlugin, VRM0 rotation, geometry cleanup, auto-registration of raw mesh morph targets for the 52 ARKit Perfect Sync shape keys, neutral expression reset).
+
+### `PostFX.tsx` (post-processing pipeline)
+Order: `RenderPass` → `UnrealBloomPass` → `OutputPass` → `Stylize` (chromatic/pixel) → `Adjustment` (brightness/saturation/contrast/hue/temperature) → `FXAA`.
+
+- Internal render targets use `HalfFloatType` and **MSAA `samples: msaa ? 4 : 0`** (configurable in Effects / Optimization).
+- `renderScale` shrinks only the composer's internal render targets, never the canvas CSS size (UI stays sharp).
+- FPS cap skips `composer.render()` frames; `renderer.info.autoReset` is disabled to report full-frame draw calls.
+- Bloom threshold defaults above 1 so white/background (LDR) does not glow; only HDR emissive blooms.
+
+### `materialFX.ts`
+Injects GLSL into MToon via `onBeforeCompile` (chaining MToon's own hook): independent flags `uHologramOn`, `uDissolveOn`, `uGlowOn`, `uScanlineOn`, applied in sequence so effects combine. Procedural scanlines use `fwidth()` for analytic anti-aliasing. Outline uses MToon's native outline (never generated on face/mouth parts).
+
+### Other 3D libs
+- `lib/vrm/mtoon.ts` — applies the MToon look (toony, GI, shade shift, rim, boost).
+- `lib/vrm/wind.ts` — breeze applied to spring bones.
+- `lib/vrm/optimization.ts` — low-power material swap (`MeshLambertMaterial`) and selective VRM update.
+- `lib/vrm/gazeMath.ts` — gaze math, VRM0 pitch correction, stand pose.
+
+## Panels
+
+- **`AvatarPanel.tsx`** — "VRM model": Model, MToon, Effects (multi-select + FXAA/MSAA), Face (emotion blendshapes + collapsible 52 ARKit Perfect Sync sliders), Wind, and mesh visibility groups (collapsed by default).
+- **`ControlPanel.tsx`** — Options: Track, Motion, Scene, Camera, Light, Color.
+- **`OptimizationPanel.tsx`** — Render (FPS cap, render scale, FXAA/MSAA, pixel ratio), VRM Boost (physics, morphs, low-power), Telemetry.
+- **`VmcPanel.tsx`** — Receive/Send tabs (ports, Ex.Tracker Perfect Sync toggles & clip counter badge, applied parts, calibration, live status).
+- Panels are wrapped in `DraggablePanel` so they can be repositioned.
+
+## VMC protocol & Perfect Sync (`src/lib/vmc/`)
+
+- `osc.ts` — dependency-free OSC encoder/decoder (single messages and `#bundle`; `f/i/s/T/F` args; big-endian floats; 4-byte padding).
+- `vmc.ts` — bone name maps (Unity ↔ VRM), RH→LH quaternion conversion, `PERFECT_SYNC_CLIP_NAMES` (all 52 ARKit BlendShapeClip names from VMagicMirror / Vear / Luppet / HANA_Tool spec), L/R mirroring for asymmetrical ARKit channels, fallback map to standard VRM expressions, shared `vmcState` / `vmcReceivedState`, packet builders, incoming packet processing.
+
+**Send flow**: `VRMAvatar` fills `vmcState` → `VmcBridge` builds datagrams at ~30 Hz → `electronAPI.vmcSend(Uint8Array)` → main sends UDP to `host:port`.
+**Receive flow**: main binds a UDP socket → `vmc:packet` IPC → `VmcBridge` decodes → `vmcReceivedState` → `VRMAvatar` applies poses/blendshapes. While receiving, local gaze/random-eyes/idle-sway are disabled.
+
+## Build & CI
+
+- `npm run build:electron` — Next build + electron-builder (OpenGL).
+- `npm run build:electron:vulkan` — same, packaged with `magicianGpu=vulkan` (Linux AppImage under `dist-vulkan/`).
+- `.github/workflows/electron-build.yml` — builds on push/PR to `electron`.
+- `.github/workflows/vmc-build.yml` — builds on push/PR to `VMC-test`.
+
+## Persistence
+
+- `localStorage` (`magician_vrm_config`): toggles, lighting, adjust, shader, optimization, mtoon, wind, camera, VMC & Perfect Sync config, etc.
+- `IndexedDB` (`MagicianVrmDB`): the last `.vrm` blob and name.

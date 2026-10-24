@@ -1,7 +1,6 @@
 'use client';
 
 import { Github, Heart } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 
 interface HeaderProps {
   status: string;
@@ -9,27 +8,55 @@ interface HeaderProps {
 
 export function Header({ status }: HeaderProps) {
   return (
-    <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-zinc-900/80 border border-zinc-800 backdrop-blur-md shadow-lg shadow-black/30">
-      <div className="flex items-center justify-center w-9 h-9">
-        <img src="/logo.svg" alt="Logo" className="w-9 h-9 object-contain" />
+    <div className="window" style={{ width: 290 }}>
+      <div className="title-bar">
+        <div className="title-bar-text">
+          <img src="/logo.svg" alt="Logo" className="w-3.5 h-3.5 object-contain" />
+          <span>MagicianVT2b.exe</span>
+        </div>
+        <div className="title-bar-controls">
+          <button type="button" aria-label="Minimize" />
+          <button type="button" aria-label="Maximize" />
+        </div>
       </div>
-      <div className="leading-tight">
-        <h1 className="text-sm font-semibold text-zinc-100">MagicianVT2b</h1>
-        <p className="text-[10px] text-zinc-400">VRM avatar · web app</p>
+
+      <div className="window-body flex items-center justify-between gap-2 my-1.5">
+        <div className="flex items-center gap-2 min-w-0">
+          <img src="/logo.svg" alt="Logo" className="w-7 h-7 object-contain shrink-0" />
+          <div className="leading-tight min-w-0">
+            <div className="font-bold text-[12px] text-[#003399] truncate">MagicianVT2b</div>
+            <div className="text-[10px] text-[#444444] truncate">VRM Avatar &amp; VMC Studio</div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0" data-no-drag>
+          <a
+            href="https://github.com/javiercplus/MAGICIANVT2B"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="GitHub Repository"
+          >
+            <button type="button" className="xp-compact-btn flex items-center gap-1">
+              <Github className="w-3 h-3" />
+              <span>GitHub</span>
+            </button>
+          </a>
+          <a
+            href="https://ko-fi.com/javiercplus"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Support on Ko-fi"
+          >
+            <button type="button" className="xp-compact-btn flex items-center gap-1">
+              <Heart className="w-3 h-3 text-[#c41e3a]" />
+            </button>
+          </a>
+        </div>
       </div>
-      <Badge variant="outline" className="ml-2 text-[10px] border-zinc-700 text-zinc-400">{status}</Badge>
-      
-      <div className="flex items-center gap-1.5 ml-1 pl-3 border-l border-zinc-800/80">
-        <a href="https://github.com/javiercplus/MAGICIANVT2B" target="_blank" rel="noopener noreferrer" 
-           className="p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/80 rounded-md transition-colors" 
-           title="GitHub Repository">
-          <Github className="w-4 h-4" />
-        </a>
-        <a href="https://ko-fi.com/javiercplus" target="_blank" rel="noopener noreferrer" 
-           className="p-1.5 text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-md transition-colors" 
-           title="Support on Ko-fi">
-          <Heart className="w-4 h-4" />
-        </a>
+
+      <div className="status-bar">
+        <p className="status-bar-field">{status}</p>
+        <p className="status-bar-field" style={{ flexGrow: 0 }}>XP Luna</p>
       </div>
     </div>
   );
