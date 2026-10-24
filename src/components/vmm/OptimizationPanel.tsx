@@ -1,14 +1,7 @@
 'use client';
 
-import { Cpu, Gauge, MonitorCog, Sparkles, X } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Slider } from '@/components/ui/slider';
-import { Separator } from '@/components/ui/separator';
+import { useId, useState } from 'react';
+import { Cpu, Gauge, MonitorCog } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { OptimizationConfig, PhysicsQuality, Telemetry } from '@/lib/vrm/constants';
 
@@ -32,12 +25,12 @@ interface RangeFieldProps {
   onChange: (v: number) => void;
 }
 
-// Slider + numeric input: every control is finely adjustable, not a binary toggle.
 function RangeField({ label, value, min, max, step, unit, decimals = 2, onChange }: RangeFieldProps) {
+  const id = useId();
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1 py-0.5" data-no-drag>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] text-zinc-300">{label}</span>
+        <label htmlFor={id} className="text-[11px] text-[#000000]">{label}</label>
         <div className="flex items-center gap-1">
           <input
             type="number"
@@ -50,48 +43,58 @@ function RangeField({ label, value, min, max, step, unit, decimals = 2, onChange
               if (!Number.isFinite(n)) return;
               onChange(Math.min(max, Math.max(min, n)));
             }}
-            className="w-16 bg-zinc-900/70 border border-zinc-700 rounded px-1.5 py-0.5 text-[11px] text-zinc-100 tabular-nums text-right focus:outline-none focus:border-violet-500/60"
+            className="w-16 text-right font-mono tabular-nums"
           />
-          {unit && <span className="text-[10px] text-zinc-500">{unit}</span>}
+          {unit && <span className="text-[10px] text-[#444444]">{unit}</span>}
         </div>
       </div>
-      <Slider value={[value]} min={min} max={max} step={step} onValueChange={(v) => onChange(v[0])} className="h-1.5" />
+      <input
+        id={id}
+        type="range"
+        value={value}
+        min={min}
+        max={max}
+        step={step}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full"
+      />
     </div>
   );
 }
 
 function SwitchRow({
-  label, description, checked, onCheckedChange, accentClass,
+  label, description, checked, onCheckedChange,
 }: {
   label: string;
   description: string;
   checked: boolean;
   onCheckedChange: (v: boolean) => void;
-  accentClass?: string;
 }) {
+  const id = useId();
   return (
-    <div className="flex items-start gap-3 rounded-lg p-2 hover:bg-zinc-800/40 transition-colors">
-      <div className={cn('flex items-center justify-center rounded-md w-7 h-7 shrink-0 mt-0.5',
-        checked ? accentClass ?? 'bg-violet-500/20 text-violet-300' : 'bg-zinc-800/60 text-zinc-500')}>
-        <Sparkles className="w-3.5 h-3.5" />
+    <div className="py-1 px-1 hover:bg-[#e8e5d5] rounded-sm" data-no-drag>
+      <div className="field-row">
+        <input
+          id={id}
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onCheckedChange(e.target.checked)}
+        />
+        <label htmlFor={id} className="font-semibold text-[#000000] cursor-pointer">{label}</label>
       </div>
-      <div className="flex-1 min-w-0">
-        <Label htmlFor={`opt-${label}`} className="text-sm font-medium text-zinc-100 cursor-pointer">{label}</Label>
-        <p className="text-[11px] text-zinc-500 leading-tight mt-0.5">{description}</p>
-      </div>
-      <Switch id={`opt-${label}`} checked={checked} onCheckedChange={onCheckedChange} />
+      <p className="text-[10px] text-[#555555] leading-tight mt-0.5 ml-5">{description}</p>
     </div>
   );
 }
 
 function StatRow({ label, value, hint, warn }: { label: string; value: string; hint?: string; warn?: boolean }) {
   return (
-    <div className="flex items-center justify-between rounded-lg px-2 py-2 bg-zinc-800/30 border border-zinc-800">
+    <div className="flex items-center justify-between px-2 py-1.5 bg-white border border-[#7f9db9]">
       <div className="min-w-0">
-        <p className="text-[11px] text-zinc-300">{label}</p>
-        {hint && <p className="text-[10px] text-zinc-500 leading-tight">{hint}</p>}
+        <div className="text-[11px] font-medium text-[#000000]">{label}</div>
+        {hint && <div className="text-[10px] text-[#555555] leading-tight">{hint}</div>}
       </div>
-      <span className={cn('text-sm font-semibold tabular-nums', warn ? 'text-amber-300' : 'text-emerald-300')}>
+      <span className={cn('text-xs font-bold font-mono tabular-nums', warn ? 'text-[#b56b00]' : 'text-[#005500]')}>
         {value}
       </span>
     </div>
@@ -99,43 +102,59 @@ function StatRow({ label, value, hint, warn }: { label: string; value: string; h
 }
 
 export function OptimizationPanel({ config, telemetry, onChange, onClose }: OptimizationPanelProps) {
+  const [activeTab, setActiveTab] = useState<'render' | 'vrm' | 'telemetry'>('render');
+
   const set = <K extends keyof OptimizationConfig>(key: K, value: OptimizationConfig[K]) =>
     onChange({ ...config, [key]: value });
 
   return (
-    <Card className={cn(
-      'w-[380px] max-w-[calc(100vw-2rem)] bg-zinc-900/90 border-zinc-800',
-      'backdrop-blur-md shadow-2xl shadow-black/40 text-zinc-100',
-    )}>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Gauge className="w-4 h-4 text-violet-300" />
-            <CardTitle className="text-sm font-semibold tracking-wide text-zinc-200">Optimization</CardTitle>
-          </div>
-          <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-zinc-400 hover:text-zinc-100" onClick={onClose}>
-            <X className="w-3.5 h-3.5" />
-          </Button>
+    <div className="window w-[390px] max-w-[calc(100vw-2rem)]">
+      <div className="title-bar">
+        <div className="title-bar-text">
+          <Gauge className="w-3.5 h-3.5" />
+          <span>Performance &amp; Optimization</span>
         </div>
-      </CardHeader>
+        <div className="title-bar-controls">
+          <button type="button" aria-label="Minimize" />
+          <button type="button" aria-label="Close" onClick={onClose} />
+        </div>
+      </div>
 
-      <CardContent className="p-3 pt-0">
-        <Tabs defaultValue="render" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-zinc-800/60 h-8">
-            <TabsTrigger value="render" className="text-[10px] uppercase tracking-wider">
-              <MonitorCog className="w-3 h-3 mr-1" />Render
-            </TabsTrigger>
-            <TabsTrigger value="vrm" className="text-[10px] uppercase tracking-wider">
-              <Cpu className="w-3 h-3 mr-1" />VRM
-            </TabsTrigger>
-            <TabsTrigger value="telemetry" className="text-[10px] uppercase tracking-wider">
-              <Gauge className="w-3 h-3 mr-1" />Stats
-            </TabsTrigger>
-          </TabsList>
+      <div className="window-body">
+        <menu role="tablist" aria-label="Optimization Tabs">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'render'}
+            onClick={() => setActiveTab('render')}
+            className="flex items-center gap-1"
+          >
+            <MonitorCog className="w-3 h-3" /> Render
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'vrm'}
+            onClick={() => setActiveTab('vrm')}
+            className="flex items-center gap-1"
+          >
+            <Cpu className="w-3 h-3" /> VRM Boost
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'telemetry'}
+            onClick={() => setActiveTab('telemetry')}
+            className="flex items-center gap-1"
+          >
+            <Gauge className="w-3 h-3" /> Telemetry
+          </button>
+        </menu>
 
-          {/* ================= PESTAÑA 1: RENDERIZADO ================= */}
-          <TabsContent value="render" className="mt-3 space-y-3">
-            <div className="space-y-3 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
+        {activeTab === 'render' && (
+          <article role="tabpanel" className="space-y-2">
+            <fieldset>
+              <legend>Frame Rate</legend>
               <RangeField
                 label="FPS limit"
                 value={config.fpsLimit}
@@ -144,12 +163,13 @@ export function OptimizationPanel({ config, telemetry, onChange, onClose }: Opti
                 step={1}
                 onChange={(v) => set('fpsLimit', v)}
               />
-              <p className="text-[10px] text-zinc-500 leading-snug">
+              <p className="text-[10px] text-[#555555] leading-snug mt-1">
                 Caps the render loop; frames over budget are skipped.
               </p>
-            </div>
+            </fieldset>
 
-            <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
+            <fieldset>
+              <legend>Resolution &amp; Antialiasing</legend>
               <RangeField
                 label="Render resolution"
                 value={config.renderScale}
@@ -159,25 +179,22 @@ export function OptimizationPanel({ config, telemetry, onChange, onClose }: Opti
                 unit={`${Math.round(config.renderScale * 100)}%`}
                 onChange={(v) => set('renderScale', v)}
               />
-              {/* NOTE: this scales the composer's internal WebGLRenderTarget only;
-                  the canvas CSS size is untouched, so the Electron UI stays sharp. */}
               <SwitchRow
                 label="FXAA"
-                description="Light post-AA that hides edge aliasing when internal res is low. No MSAA cost."
+                description="Light post-AA that hides edge aliasing when internal res is low."
                 checked={config.antiAlias}
                 onCheckedChange={(v) => set('antiAlias', v)}
-                accentClass="bg-sky-500/20 text-sky-300"
               />
               <SwitchRow
                 label="MSAA 4x"
-                description="Multisampling on the post-processing render targets. Crisper edges, small GPU cost."
+                description="Multisampling on the post-processing render targets. Crisper edges."
                 checked={config.msaa}
                 onCheckedChange={(v) => set('msaa', v)}
-                accentClass="bg-emerald-500/20 text-emerald-300"
               />
-            </div>
+            </fieldset>
 
-            <div className="space-y-2 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
+            <fieldset>
+              <legend>Device Pixel Ratio</legend>
               <RangeField
                 label="Pixel ratio"
                 value={config.pixelRatio}
@@ -186,13 +203,15 @@ export function OptimizationPanel({ config, telemetry, onChange, onClose }: Opti
                 step={0.05}
                 onChange={(v) => set('pixelRatio', v)}
               />
-              <p className="text-[10px] text-zinc-500 leading-snug">renderer.setPixelRatio()</p>
-            </div>
-          </TabsContent>
+              <p className="text-[10px] text-[#555555] leading-snug mt-1">renderer.setPixelRatio()</p>
+            </fieldset>
+          </article>
+        )}
 
-          {/* ================= PESTAÑA 2: VRM BOOST ================= */}
-          <TabsContent value="vrm" className="mt-3 space-y-3">
-            <div className="space-y-3 rounded-lg p-2 bg-zinc-800/30 border border-zinc-800">
+        {activeTab === 'vrm' && (
+          <article role="tabpanel" className="space-y-2">
+            <fieldset>
+              <legend>Spring-Bone Physics</legend>
               <RangeField
                 label={`Physics quality (${PHYSICS_LABELS[config.physicsQuality === 'low' ? 0 : config.physicsQuality === 'medium' ? 1 : 2].toUpperCase()})`}
                 value={config.physicsQuality === 'low' ? 0 : config.physicsQuality === 'medium' ? 1 : 2}
@@ -201,36 +220,36 @@ export function OptimizationPanel({ config, telemetry, onChange, onClose }: Opti
                 step={1}
                 onChange={(v) => set('physicsQuality', PHYSICS_LABELS[Math.round(v)])}
               />
-              <p className="text-[10px] text-zinc-500 leading-snug">
+              <p className="text-[10px] text-[#555555] leading-snug mt-1">
                 Throttles the spring-bone solver (low = 10 Hz, medium = 20 Hz, high = every frame).
-                Backs off further when the avatar is idle.
               </p>
-            </div>
+            </fieldset>
 
-            <SwitchRow
-              label="Morph optimization"
-              description="Skip expression solving (morphTargetInfluences) when face weights don't change."
-              checked={config.morphOptimization}
-              onCheckedChange={(v) => set('morphOptimization', v)}
-              accentClass="bg-fuchsia-500/20 text-fuchsia-300"
-            />
+            <fieldset>
+              <legend>Solver &amp; Shader Boost</legend>
+              <SwitchRow
+                label="Morph optimization"
+                description="Skip expression solving (morphTargetInfluences) when face weights don't change."
+                checked={config.morphOptimization}
+                onCheckedChange={(v) => set('morphOptimization', v)}
+              />
+              <SwitchRow
+                label="MToon low-power"
+                description="Swap expensive MToon materials for MeshLambertMaterial. Reversible, live."
+                checked={config.mtoonLowPower}
+                onCheckedChange={(v) => set('mtoonLowPower', v)}
+              />
+            </fieldset>
+          </article>
+        )}
 
-            <SwitchRow
-              label="MToon low-power"
-              description="Swap expensive MToon materials for MeshLambertMaterial. Reversible, live."
-              checked={config.mtoonLowPower}
-              onCheckedChange={(v) => set('mtoonLowPower', v)}
-              accentClass="bg-amber-500/20 text-amber-300"
-            />
-          </TabsContent>
-
-          {/* ================= PESTAÑA 3: TELEMETRÍA ================= */}
-          <TabsContent value="telemetry" className="mt-3 space-y-2">
+        {activeTab === 'telemetry' && (
+          <article role="tabpanel" className="space-y-2">
             <div className="flex items-center justify-between px-1">
-              <span className="text-[10px] uppercase tracking-wider text-zinc-500">Live · 500 ms</span>
-              <Badge className="bg-emerald-500/15 text-emerald-300 border-emerald-500/40">
+              <span className="text-[10px] uppercase tracking-wider text-[#555555]">Live · 500 ms</span>
+              <span className="px-1.5 py-0.5 text-[10px] font-bold bg-[#e6ffe6] border border-[#2b8a2b] text-[#005500]">
                 {telemetry.fps} FPS
-              </Badge>
+              </span>
             </div>
             <StatRow label="FPS (real)" value={`${telemetry.fps}`} hint="Rendered frames per second" />
             <StatRow
@@ -241,14 +260,18 @@ export function OptimizationPanel({ config, telemetry, onChange, onClose }: Opti
             />
             <StatRow label="Draw calls" value={`${telemetry.calls}`} hint="renderer.info.render.calls" />
             <StatRow label="Geometries" value={`${telemetry.geometries}`} hint="renderer.info.memory.geometries" />
-            <Separator className="bg-zinc-800" />
-            <p className="text-[10px] text-zinc-500 leading-snug">
-              If GPU textures only grow when you swap avatars, textures from the previous model are
-              not being disposed.
+            <p className="text-[10px] text-[#555555] leading-snug pt-1">
+              If GPU textures only grow when you swap avatars, textures from the previous model are not being disposed.
             </p>
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+          </article>
+        )}
+      </div>
+
+      <div className="status-bar">
+        <p className="status-bar-field">FPS: {telemetry.fps}</p>
+        <p className="status-bar-field">Draw Calls: {telemetry.calls}</p>
+        <p className="status-bar-field">Scale: {Math.round(config.renderScale * 100)}%</p>
+      </div>
+    </div>
   );
 }

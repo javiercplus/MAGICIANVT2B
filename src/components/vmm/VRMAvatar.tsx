@@ -30,6 +30,7 @@ import {
   BONE_CATEGORY,
   swapLeftRightBoneName,
   mapReceivedBlendShapeNames,
+  normalizeExpressionKey,
   type VmcConfig,
   type VmcBonePose,
 } from '@/lib/vmc/vmc';
@@ -83,6 +84,9 @@ export function VRMAvatar(props: VRMAvatarProps) {
   const prevReceiveEnabledRef = useRef(vmcConfig.receive.enabled);
   const initialHipsPosRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 1, 0));
   const senderInitialHipsPosRef = useRef<THREE.Vector3 | null>(null);
+
+  // Normalized lookup map of expression names registered on the VRM (e.g. "browinnerup" -> "BrowInnerUp")
+  const expressionLookupRef = useRef<Record<string, string>>({});
 
   const boneMapRef = useRef<Partial<Record<VRMHumanBoneName, THREE.Object3D>>>({});
   const headBoneRef = useRef<THREE.Object3D | null>(null);
@@ -157,6 +161,7 @@ export function VRMAvatar(props: VRMAvatarProps) {
       vmcState.loaded = false;
       cameraHomeRef.current = null;
       vrm0Ref.current = false;
+      expressionLookupRef.current = {};
       boneMapRef.current = {};
       headBoneRef.current = null;
       neckBoneRef.current = null;
@@ -177,6 +182,16 @@ export function VRMAvatar(props: VRMAvatarProps) {
         const vrmScene = result.scene;
         vrmRef.current = vrm;
         vmcState.loaded = true;
+
+        // Build case-insensitive / normalized expression name lookup for Perfect Sync & VMC
+        const exprLookup: Record<string, string> = {};
+        for (const expr of vrm.expressionManager?.expressions ?? []) {
+          const exact = expr.expressionName;
+          exprLookup[exact] = exact;
+          exprLookup[exact.toLowerCase()] = exact;
+          exprLookup[normalizeExpressionKey(exact)] = exact;
+        }
+        expressionLookupRef.current = exprLookup;
 
         // IMPORTANT: We MUST use getNormalizedBoneNode so that vrm.update(dt)
         // propagates normalized bone rotations to the raw skeleton mesh!
@@ -240,6 +255,7 @@ export function VRMAvatar(props: VRMAvatarProps) {
       vrmRef.current = null;
       vmcState.loaded = false;
       vrm0Ref.current = false;
+      expressionLookupRef.current = {};
       boneMapRef.current = {};
       headBoneRef.current = null;
       neckBoneRef.current = null;
@@ -484,21 +500,59 @@ export function VRMAvatar(props: VRMAvatarProps) {
       }
     }
 
-    // 4. Facial Expressions (BlendShapes)
+    // 4. Facial Expressions (BlendShapes + Perfect Sync 52 ARKit Clips)
     let expressionsDirty = false;
     const receivingBlendShapes = isReceiving && recvCfg.applyBlendShape && Object.keys(vmcReceivedState.blendshapes).length > 0;
 
     if (receivingBlendShapes) {
       const em = vrm.expressionManager;
       if (em) {
+        const exprLookup = expressionLookupRef.current;
+        const nextWeights: Record<string, number> = {};
+
+        const resolveModelExpr = (candidate: string): string | null => {
+          return (
+            exprLookup[candidate] ??
+            exprLookup[candidate.toLowerCase()] ??
+            exprLookup[normalizeExpressionKey(candidate)] ??
+            null
+          );
+        };
+
         for (const [rawName, val] of Object.entries(vmcReceivedState.blendshapes)) {
-          const candidates = mapReceivedBlendShapeNames(rawName);
-          for (const candidate of candidates) {
-            try {
-              em.setValue(candidate, val);
-            } catch {}
+          const mapped = mapReceivedBlendShapeNames(rawName, {
+            usePerfectSync: recvCfg.usePerfectSync,
+            perfectSyncFallback: recvCfg.perfectSyncFallback,
+            mirrorLeftRight: recvCfg.mirrorLeftRight,
+          });
+
+          let appliedPrimary = false;
+          for (const candidate of mapped.primaryCandidates) {
+            const actualName = resolveModelExpr(candidate);
+            if (actualName) {
+              nextWeights[actualName] = Math.max(nextWeights[actualName] ?? 0, val);
+              appliedPrimary = true;
+            }
+          }
+
+          // If the model does not have the native Perfect Sync clip, fall back to standard VRM expressions
+          if (!appliedPrimary && mapped.fallbackCandidates.length > 0) {
+            for (const fb of mapped.fallbackCandidates) {
+              const actualName = resolveModelExpr(fb);
+              if (actualName) {
+                nextWeights[actualName] = Math.max(nextWeights[actualName] ?? 0, val);
+              }
+            }
           }
         }
+
+        em.resetValues();
+        for (const [exprName, w] of Object.entries(nextWeights)) {
+          try {
+            em.setValue(exprName, w);
+          } catch {}
+        }
+
         if (mouthValueRef.current && mouthValueRef.current > 0.02) {
           try {
             em.setValue(LIPSYNC.MOUTH_OPEN_PRESET, mouthValueRef.current);

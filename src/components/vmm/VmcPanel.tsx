@@ -2,19 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import {
-  Radio, ArrowDownToLine, ArrowUpFromLine, CheckCircle2, AlertCircle, X, Activity, RotateCcw, Axis3d, Eye,
+  Radio, ArrowDownToLine, ArrowUpFromLine, CheckCircle2, AlertCircle, Activity, RotateCcw, Axis3d, Eye, Sparkles, Smile,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import {
-  DEFAULT_VMC_CONFIG,
   isVmcReceivingActive,
   vmcReceivedState,
+  PERFECT_SYNC_CLIP_NAMES,
   type VmcConfig,
   type VmcReceiveConfig,
   type VmcSendConfig,
@@ -22,6 +16,7 @@ import {
 
 interface VmcPanelProps {
   config: VmcConfig;
+  modelPerfectSyncCount?: number;
   onChange: (config: VmcConfig) => void;
   onResetAvatar?: () => void;
   onClose: () => void;
@@ -33,14 +28,14 @@ interface ReceiveSocketStatus {
   error: string | null;
 }
 
-function CompactSwitch({
+function XpCheckItem({
   id,
   label,
   hint,
   icon,
   checked,
   onCheckedChange,
-  accentClass,
+  disabled,
 }: {
   id: string;
   label: string;
@@ -48,28 +43,47 @@ function CompactSwitch({
   icon?: React.ReactNode;
   checked: boolean;
   onCheckedChange: (v: boolean) => void;
-  accentClass?: string;
+  disabled?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 bg-zinc-800/35 border border-zinc-800/80 hover:bg-zinc-800/55 transition-colors">
-      <div className="flex items-center gap-1.5 min-w-0 flex-1">
-        {icon && <span className="text-zinc-400 shrink-0">{icon}</span>}
-        <div className="min-w-0 flex-1">
-          <Label htmlFor={id} className={cn('text-[11px] font-medium text-zinc-100 cursor-pointer block truncate', accentClass)}>
-            {label}
-          </Label>
-          {hint && (
-            <p className="text-[9px] text-zinc-500 leading-tight truncate" title={hint}>{hint}</p>
-          )}
-        </div>
+    <div
+      className={cn(
+        'border border-[#d0d0bf] bg-[#f8f7f1] px-2 py-1 rounded-[2px]',
+        disabled && 'opacity-50 pointer-events-none',
+      )}
+      data-no-drag
+    >
+      <div className="field-row">
+        <input
+          id={id}
+          type="checkbox"
+          checked={checked}
+          disabled={disabled}
+          onChange={(e) => onCheckedChange(e.target.checked)}
+        />
+        <label htmlFor={id} className="text-[11px] font-semibold text-[#111] cursor-pointer flex items-center gap-1">
+          {icon}
+          <span>{label}</span>
+        </label>
       </div>
-      <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} className="scale-90 shrink-0" />
+      {hint && (
+        <p className="text-[9.5px] text-[#555] leading-tight pl-4 mt-0.5 truncate" title={hint}>
+          {hint}
+        </p>
+      )}
     </div>
   );
 }
 
-export function VmcPanel({ config, onChange, onResetAvatar, onClose }: VmcPanelProps) {
+export function VmcPanel({
+  config,
+  modelPerfectSyncCount = 0,
+  onChange,
+  onResetAvatar,
+  onClose,
+}: VmcPanelProps) {
   const { receive, send } = config;
+  const [activeTab, setActiveTab] = useState<'receive' | 'send'>('receive');
 
   const [recvPortInput, setRecvPortInput] = useState<string>(String(receive.port));
   const [sendHostInput, setSendHostInput] = useState<string>(send.host);
@@ -83,6 +97,7 @@ export function VmcPanel({ config, onChange, onResetAvatar, onClose }: VmcPanelP
   const [receivingTraffic, setReceivingTraffic] = useState(false);
   const [packetCount, setPacketCount] = useState(0);
   const [boneCount, setBoneCount] = useState(0);
+  const [rxPerfectSyncCount, setRxPerfectSyncCount] = useState(0);
 
   useEffect(() => {
     setRecvPortInput(String(receive.port));
@@ -114,6 +129,7 @@ export function VmcPanel({ config, onChange, onResetAvatar, onClose }: VmcPanelP
       setReceivingTraffic(active);
       setPacketCount(vmcReceivedState.packetCount);
       setBoneCount(Object.keys(vmcReceivedState.bones).length);
+      setRxPerfectSyncCount(vmcReceivedState.perfectSyncActiveCount);
     }, 300);
     return () => clearInterval(timer);
   }, [receive.enabled]);
@@ -171,451 +187,449 @@ export function VmcPanel({ config, onChange, onResetAvatar, onClose }: VmcPanelP
     }
   };
 
+  const totalPerfectSyncClips = PERFECT_SYNC_CLIP_NAMES.length;
+  const hasModelPerfectSync = modelPerfectSyncCount > 0;
+
   return (
-    <Card className={cn(
-      'w-[740px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-4rem)] flex flex-col bg-zinc-900/95 border-zinc-800',
-      'backdrop-blur-md shadow-2xl shadow-black/70 text-zinc-100 overflow-hidden',
-    )}>
-      {/* Header bar */}
-      <CardHeader className="py-2 px-3.5 shrink-0 border-b border-zinc-800/80">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className={cn(
-              'flex items-center justify-center rounded-md w-6 h-6 shrink-0',
-              (receive.enabled || send.enabled)
-                ? 'bg-emerald-500/20 text-emerald-300'
-                : 'bg-zinc-800 text-zinc-400',
-            )}>
-              <Radio className="w-3.5 h-3.5" />
-            </span>
-            <div className="min-w-0 flex items-center gap-2">
-              <CardTitle className="text-xs font-semibold tracking-wide text-zinc-200">
-                VMC Protocol
-              </CardTitle>
-              <span className="text-[10px] text-zinc-500">·</span>
-              <p className="text-[11px] text-zinc-400 truncate">
-                Receiving (Marionette) &amp; Sending (Performer)
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1.5 shrink-0">
-            {receive.enabled && (
-              <Badge className={cn(
-                'text-[9px] px-1.5 py-0 h-4 font-mono',
-                receivingTraffic
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                  : 'bg-sky-500/15 text-sky-300 border-sky-500/40',
-              )}>
-                RX {receivingTraffic ? 'TRACKING' : `:${receive.port}`}
-              </Badge>
-            )}
-            {send.enabled && (
-              <Badge className="text-[9px] px-1.5 py-0 h-4 bg-violet-500/20 text-violet-300 border-violet-500/40 font-mono">
-                TX :{send.port}
-              </Badge>
-            )}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-zinc-400 hover:text-zinc-100"
-              onClick={onClose}
-            >
-              <X className="w-3.5 h-3.5" />
-            </Button>
-          </div>
+    <div className="window w-[740px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-4rem)] flex flex-col">
+      <div className="title-bar shrink-0">
+        <div className="title-bar-text flex items-center gap-1.5">
+          <Radio className="w-3.5 h-3.5" />
+          <span>VMC Protocol &amp; Perfect Sync — External Tracking (VMagicMirror / iOS ARKit)</span>
         </div>
-      </CardHeader>
+        <div className="title-bar-controls">
+          <button type="button" aria-label="Close" onClick={onClose} />
+        </div>
+      </div>
 
-      <CardContent className="p-3 flex-1 min-h-0 flex flex-col overflow-hidden">
-        <Tabs defaultValue="receive" className="w-full flex-1 min-h-0 flex flex-col">
-          <TabsList className="grid w-full grid-cols-2 bg-zinc-800/60 h-7 shrink-0">
-            <TabsTrigger value="receive" className="text-[10px] uppercase tracking-wider flex items-center gap-1.5 py-0.5">
-              <ArrowDownToLine className="w-3 h-3 text-emerald-400" />
-              Receiving (Recibir Movimiento)
-            </TabsTrigger>
-            <TabsTrigger value="send" className="text-[10px] uppercase tracking-wider flex items-center gap-1.5 py-0.5">
-              <ArrowUpFromLine className="w-3 h-3 text-violet-400" />
-              Sending (Enviar Movimiento)
-            </TabsTrigger>
-          </TabsList>
+      <div className="window-body flex-1 min-h-0 flex flex-col overflow-hidden">
+        <menu role="tablist" className="shrink-0">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'receive'}
+            onClick={() => setActiveTab('receive')}
+            className="flex items-center gap-1"
+          >
+            <ArrowDownToLine className="w-3 h-3 text-[#1d7a1d]" />
+            <span>Receiving (Recibir / Perfect Sync)</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'send'}
+            onClick={() => setActiveTab('send')}
+            className="flex items-center gap-1"
+          >
+            <ArrowUpFromLine className="w-3 h-3 text-[#003399]" />
+            <span>Sending (Enviar / Perfect Sync)</span>
+          </button>
+        </menu>
 
-          {/* ==================== TAB 1: RECEIVING (HORIZONTAL 2-COLUMN LAYOUT) ==================== */}
-          <TabsContent value="receive" className="mt-2.5 flex-1 min-h-0 overflow-y-auto pr-1">
-            <div className="grid grid-cols-2 gap-3">
-              {/* LEFT COLUMN: Connection & Data Parts */}
-              <div className="space-y-2.5">
-                {/* Enable + Status Card */}
-                <div className="rounded-lg p-2.5 bg-zinc-800/40 border border-zinc-800 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <Label htmlFor="vmc-receive-enable" className="text-xs font-semibold text-emerald-300 cursor-pointer">
-                        Enable VMC Protocol (Receive)
-                      </Label>
-                      <p className="text-[10px] text-zinc-400 leading-tight">
-                        Receive motion from VRM Posing Desktop, VSeeFace, LuppetX, VMagicMirror
-                      </p>
-                    </div>
-                    <Switch
-                      id="vmc-receive-enable"
-                      checked={receive.enabled}
-                      onCheckedChange={(v) => {
-                        setReceive('enabled', v);
-                        if (!v) onResetAvatar?.();
-                      }}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-zinc-800/80">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      {socketStatus.error ? (
-                        <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-                      ) : receivingTraffic ? (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                      ) : (
-                        <Activity className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-                      )}
-                      <span className="text-[10px] text-zinc-300 truncate">
-                        {!receive.enabled
-                          ? 'Receiver disabled'
-                          : socketStatus.error
-                            ? socketStatus.error
-                            : receivingTraffic
-                              ? `Live (${boneCount} bones · ${packetCount} pkts)`
-                              : `Listening on UDP port ${receive.port}…`}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1 shrink-0">
-                      <span className="text-[9px] text-zinc-400">Port:</span>
+        <article role="tabpanel" className="flex-1 min-h-0 overflow-y-auto">
+          {activeTab === 'receive' && (
+            <div className="grid grid-cols-2 gap-2.5">
+              {/* LEFT COLUMN: Connection, Perfect Sync & Data Parts */}
+              <div className="space-y-2">
+                <fieldset>
+                  <legend>VMC Receiver Connection (UDP OSC)</legend>
+                  <div className="space-y-2" data-no-drag>
+                    <div className="field-row">
                       <input
-                        type="number"
-                        min={1}
-                        max={65535}
-                        value={recvPortInput}
-                        onChange={(e) => setRecvPortInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') handleApplyReceivePort(); }}
-                        className="w-16 bg-zinc-900/90 border border-zinc-700 rounded px-1.5 py-0.5 text-[11px] text-zinc-100 tabular-nums text-right focus:outline-none focus:border-emerald-500/60"
-                        title="UDP Port (default 39539)"
+                        id="vmc-receive-enable"
+                        type="checkbox"
+                        checked={receive.enabled}
+                        onChange={(e) => {
+                          setReceive('enabled', e.target.checked);
+                          if (!e.target.checked) onResetAvatar?.();
+                        }}
                       />
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={handleApplyReceivePort}
-                        className="h-6 px-2 text-[10px] bg-emerald-600/20 border-emerald-500/40 text-emerald-200 hover:bg-emerald-600/30"
-                      >
-                        Apply
-                      </Button>
+                      <label htmlFor="vmc-receive-enable" className="text-[11px] font-bold text-[#003399] cursor-pointer">
+                        Enable VMC Protocol (Receive)
+                      </label>
                     </div>
-                  </div>
-                </div>
+                    <p className="text-[10px] text-[#444] leading-tight">
+                      Receive motion &amp; Perfect Sync from VMagicMirror, VSeeFace, Luppet, Vear
+                    </p>
 
-                {/* Data to Apply */}
-                <div className="space-y-1.5">
-                  <span className="text-[9px] uppercase tracking-wider text-zinc-500 px-0.5">
-                    Data to apply (Partes a trackear)
-                  </span>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <CompactSwitch
-                      id="vmc-recv-upper"
-                      label="Upper Body"
-                      hint="Head, spine, arms"
-                      checked={receive.applyUpperBody}
-                      onCheckedChange={(v) => setReceive('applyUpperBody', v)}
-                    />
-                    <CompactSwitch
-                      id="vmc-recv-hand"
-                      label="Hands & Fingers"
-                      hint="30 finger bones"
-                      checked={receive.applyHand}
-                      onCheckedChange={(v) => setReceive('applyHand', v)}
-                    />
-                    <CompactSwitch
-                      id="vmc-recv-leg"
-                      label="Legs & Feet"
-                      hint="Upper/lower legs"
-                      checked={receive.applyLeg}
-                      onCheckedChange={(v) => setReceive('applyLeg', v)}
-                    />
-                    <CompactSwitch
-                      id="vmc-recv-face"
-                      label="Facial (BlendShape)"
-                      hint="Expressions & mouth"
-                      checked={receive.applyBlendShape}
-                      onCheckedChange={(v) => setReceive('applyBlendShape', v)}
-                    />
-                  </div>
-
-                  {/* Dedicated Eye Bones Switch */}
-                  <CompactSwitch
-                    id="vmc-recv-eye"
-                    label="Eye Bones (Ojos VMC)"
-                    hint="Off = ojos siguen ratón/gaze natural; On = rotar por VMC"
-                    icon={<Eye className="w-3.5 h-3.5" />}
-                    checked={receive.applyEye}
-                    onCheckedChange={(v) => setReceive('applyEye', v)}
-                    accentClass={receive.applyEye ? 'text-amber-300' : 'text-zinc-200'}
-                  />
-                </div>
-              </div>
-
-              {/* RIGHT COLUMN: Axis Calibration & Motion Options */}
-              <div className="space-y-2.5">
-                {/* Axis Calibration */}
-                <div className="rounded-lg p-2.5 bg-zinc-800/30 border border-zinc-800 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-medium text-amber-300 flex items-center gap-1">
-                      <Axis3d className="w-3.5 h-3.5" /> Axis Calibration (Ejes de Rotación)
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => applyAxisPreset('vrm0_unity')}
-                      className="text-[9px] text-zinc-400 hover:text-zinc-100 flex items-center gap-1"
-                      title="Reset axes to standard Unity VMC"
-                    >
-                      <RotateCcw className="w-2.5 h-2.5" /> Reset Default
-                    </button>
-                  </div>
-
-                  {/* Presets */}
-                  <div className="grid grid-cols-3 gap-1">
-                    <button
-                      type="button"
-                      onClick={() => applyAxisPreset('vrm0_unity')}
-                      className={cn(
-                        'text-[9px] py-1 px-1 rounded border transition-colors truncate',
-                        !receive.invertX && receive.invertY && receive.invertZ && !receive.mirrorLeftRight
-                          ? 'bg-emerald-600/30 border-emerald-500/50 text-emerald-100 font-medium'
-                          : 'bg-zinc-900/50 border-zinc-700/60 text-zinc-400 hover:text-zinc-200',
-                      )}
-                    >
-                      Unity Standard
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyAxisPreset('mirror_z')}
-                      className={cn(
-                        'text-[9px] py-1 px-1 rounded border transition-colors truncate',
-                        receive.invertX && receive.invertY && !receive.invertZ && !receive.mirrorLeftRight
-                          ? 'bg-emerald-600/30 border-emerald-500/50 text-emerald-100 font-medium'
-                          : 'bg-zinc-900/50 border-zinc-700/60 text-zinc-400 hover:text-zinc-200',
-                      )}
-                    >
-                      Invert X+Y (Z-Flip)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyAxisPreset('vrm1_direct')}
-                      className={cn(
-                        'text-[9px] py-1 px-1 rounded border transition-colors truncate',
-                        !receive.invertX && !receive.invertY && !receive.invertZ && !receive.mirrorLeftRight
-                          ? 'bg-emerald-600/30 border-emerald-500/50 text-emerald-100 font-medium'
-                          : 'bg-zinc-900/50 border-zinc-700/60 text-zinc-400 hover:text-zinc-200',
-                      )}
-                    >
-                      Raw (Direct)
-                    </button>
-                  </div>
-
-                  {/* Individual Inversion Switches */}
-                  <div className="grid grid-cols-2 gap-1.5 pt-0.5">
-                    <CompactSwitch
-                      id="vmc-axis-x"
-                      label="Invert X (Pitch)"
-                      hint="Up / Down tilt"
-                      checked={receive.invertX}
-                      onCheckedChange={(v) => setReceive('invertX', v)}
-                    />
-                    <CompactSwitch
-                      id="vmc-axis-y"
-                      label="Invert Y (Yaw)"
-                      hint="Left / Right twist"
-                      checked={receive.invertY}
-                      onCheckedChange={(v) => setReceive('invertY', v)}
-                    />
-                    <CompactSwitch
-                      id="vmc-axis-z"
-                      label="Invert Z (Roll)"
-                      hint="Arm raise / Side tilt"
-                      checked={receive.invertZ}
-                      onCheckedChange={(v) => setReceive('invertZ', v)}
-                    />
-                    <CompactSwitch
-                      id="vmc-axis-mirror"
-                      label="Swap Left ↔ Right"
-                      hint="Mirror L/R bones"
-                      checked={receive.mirrorLeftRight}
-                      onCheckedChange={(v) => setReceive('mirrorLeftRight', v)}
-                    />
-                  </div>
-                </div>
-
-                {/* Pose & Position Options */}
-                <div className="space-y-1.5">
-                  <span className="text-[9px] uppercase tracking-wider text-zinc-500 px-0.5">
-                    Pose &amp; Position Options
-                  </span>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <CompactSwitch
-                      id="vmc-recv-smooth"
-                      label="Smooth Pose"
-                      hint="Slerp anti-jitter"
-                      checked={receive.smoothPose}
-                      onCheckedChange={(v) => setReceive('smoothPose', v)}
-                    />
-                    <CompactSwitch
-                      id="vmc-recv-spine-base"
-                      label="Add Idle Sway"
-                      hint="Natural breathing"
-                      checked={receive.applySpineBase}
-                      onCheckedChange={(v) => setReceive('applySpineBase', v)}
-                    />
-                    <CompactSwitch
-                      id="vmc-recv-hips-pos"
-                      label="Hips Position"
-                      hint="Relative translation"
-                      checked={receive.applyHipsPosition}
-                      onCheckedChange={(v) => setReceive('applyHipsPosition', v)}
-                    />
-                    <CompactSwitch
-                      id="vmc-recv-root"
-                      label="Root Transform"
-                      hint="/VMC/Ext/Root/Pos"
-                      checked={receive.applyRoot}
-                      onCheckedChange={(v) => setReceive('applyRoot', v)}
-                    />
-                  </div>
-
-                  {/* Quick Reset Pose & Position Button */}
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => onResetAvatar?.()}
-                    className="w-full h-6 text-[10px] bg-zinc-800/60 border-zinc-700 hover:bg-zinc-700 hover:text-white text-zinc-300 mt-1"
-                  >
-                    <RotateCcw className="w-3 h-3 mr-1 text-emerald-400" />
-                    Reset Pose &amp; Position to Default
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </TabsContent>
-
-          {/* ==================== TAB 2: SENDING (HORIZONTAL 2-COLUMN LAYOUT) ==================== */}
-          <TabsContent value="send" className="mt-2.5 flex-1 min-h-0 overflow-y-auto pr-1">
-            <div className="grid grid-cols-2 gap-3">
-              {/* LEFT COLUMN: Target & Master Enable */}
-              <div className="space-y-2.5">
-                <div className="rounded-lg p-2.5 bg-zinc-800/40 border border-zinc-800 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <Label htmlFor="vmc-send-enable" className="text-xs font-semibold text-violet-300 cursor-pointer">
-                        Enable VMC Protocol (Send)
-                      </Label>
-                      <p className="text-[10px] text-zinc-400 leading-tight">
-                        Broadcast motion as Performer via UDP OSC
-                      </p>
-                    </div>
-                    <Switch
-                      id="vmc-send-enable"
-                      checked={send.enabled}
-                      onCheckedChange={(v) => setSend('enabled', v)}
-                    />
-                  </div>
-
-                  <div className="pt-2 border-t border-zinc-800/80 space-y-1.5">
-                    <div className="grid grid-cols-3 gap-1.5 items-end">
-                      <div className="col-span-2 space-y-0.5">
-                        <span className="text-[9px] text-zinc-400">Target IP / Host</span>
-                        <input
-                          type="text"
-                          value={sendHostInput}
-                          onChange={(e) => setSendHostInput(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') handleApplySendTarget(); }}
-                          className="w-full bg-zinc-900/90 border border-zinc-700 rounded px-2 py-0.5 text-[11px] text-zinc-100 font-mono focus:outline-none focus:border-violet-500/60"
-                          placeholder="127.0.0.1"
-                        />
+                    <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-[#d0d0bf]">
+                      <div className="flex items-center gap-1 min-w-0">
+                        {socketStatus.error ? (
+                          <AlertCircle className="w-3.5 h-3.5 text-[#b91c1c] shrink-0" />
+                        ) : receivingTraffic ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-[#1d7a1d] shrink-0" />
+                        ) : (
+                          <Activity className="w-3.5 h-3.5 text-[#555] shrink-0" />
+                        )}
+                        <span className="text-[10px] text-[#222] truncate">
+                          {!receive.enabled
+                            ? 'Receiver disabled'
+                            : socketStatus.error
+                              ? socketStatus.error
+                              : receivingTraffic
+                                ? `Live (${boneCount} bones · ${rxPerfectSyncCount} ARKit)`
+                                : `Listening on UDP :${receive.port}…`}
+                        </span>
                       </div>
-                      <div className="space-y-0.5">
-                        <span className="text-[9px] text-zinc-400">Port</span>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <label htmlFor="vmc-recv-port" className="text-[10px] text-[#222]">Port:</label>
                         <input
+                          id="vmc-recv-port"
                           type="number"
                           min={1}
                           max={65535}
-                          value={sendPortInput}
-                          onChange={(e) => setSendPortInput(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') handleApplySendTarget(); }}
-                          className="w-full bg-zinc-900/90 border border-zinc-700 rounded px-1.5 py-0.5 text-[11px] text-zinc-100 tabular-nums text-right font-mono focus:outline-none focus:border-violet-500/60"
+                          value={recvPortInput}
+                          onChange={(e) => setRecvPortInput(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleApplyReceivePort(); }}
+                          className="w-16 text-right font-mono text-[11px]"
+                          title="UDP Port (default 39539)"
                         />
+                        <button
+                          type="button"
+                          onClick={handleApplyReceivePort}
+                          className="xp-compact-btn"
+                        >
+                          Apply
+                        </button>
                       </div>
                     </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={handleApplySendTarget}
-                      className="w-full h-6 text-[10px] bg-violet-600/20 border-violet-500/40 text-violet-200 hover:bg-violet-600/30"
-                    >
-                      Apply Target Destination
-                    </Button>
                   </div>
-                </div>
+                </fieldset>
+
+                <fieldset>
+                  <legend className="flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 inline mr-1" />
+                    Ex.Tracker · Perfect Sync (52 ARKit BlendShapes)
+                  </legend>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[10px] bg-[#f8f7f1] border border-[#d0d0bf] px-2 py-1">
+                      <span className="text-[#222] font-semibold">VRM Perfect Sync Status:</span>
+                      <span className={cn('font-mono font-bold', hasModelPerfectSync ? 'text-[#1d7a1d]' : 'text-[#b45309]')}>
+                        {hasModelPerfectSync
+                          ? `${modelPerfectSyncCount}/${totalPerfectSyncClips} clips ready`
+                          : 'Standard VRM Fallback'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <XpCheckItem
+                        id="vmc-recv-perfect-sync"
+                        label="Use Perfect Sync"
+                        hint="Map 52 iOS ARKit BlendShapeClips"
+                        icon={<Smile className="w-3 h-3 text-[#003399]" />}
+                        checked={receive.usePerfectSync}
+                        onCheckedChange={(v) => setReceive('usePerfectSync', v)}
+                        disabled={!receive.applyBlendShape}
+                      />
+                      <XpCheckItem
+                        id="vmc-recv-ps-fallback"
+                        label="Standard VRM Fallback"
+                        hint="ARKit → A/I/U/E/O/Blink if missing"
+                        checked={receive.perfectSyncFallback}
+                        onCheckedChange={(v) => setReceive('perfectSyncFallback', v)}
+                        disabled={!receive.applyBlendShape}
+                      />
+                    </div>
+
+                    <p className="text-[10px] text-[#444] leading-snug">
+                      Compatible with <strong>VMagicMirror</strong> (Ex.Tracker → Use Perfect Sync),{' '}
+                      <strong>HANA_Tool</strong>, <strong>Vear</strong> &amp; <strong>Luppet</strong>.
+                    </p>
+                  </div>
+                </fieldset>
+
+                <fieldset>
+                  <legend>Data to Apply (Partes a trackear)</legend>
+                  <div className="space-y-1.5">
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <XpCheckItem
+                        id="vmc-recv-upper"
+                        label="Upper Body"
+                        hint="Head, spine, arms"
+                        checked={receive.applyUpperBody}
+                        onCheckedChange={(v) => setReceive('applyUpperBody', v)}
+                      />
+                      <XpCheckItem
+                        id="vmc-recv-hand"
+                        label="Hands & Fingers"
+                        hint="30 finger bones"
+                        checked={receive.applyHand}
+                        onCheckedChange={(v) => setReceive('applyHand', v)}
+                      />
+                      <XpCheckItem
+                        id="vmc-recv-leg"
+                        label="Legs & Feet"
+                        hint="Upper/lower legs"
+                        checked={receive.applyLeg}
+                        onCheckedChange={(v) => setReceive('applyLeg', v)}
+                      />
+                      <XpCheckItem
+                        id="vmc-recv-face"
+                        label="Facial (BlendShape)"
+                        hint="Expressions & Perfect Sync"
+                        checked={receive.applyBlendShape}
+                        onCheckedChange={(v) => setReceive('applyBlendShape', v)}
+                      />
+                    </div>
+                    <XpCheckItem
+                      id="vmc-recv-eye"
+                      label="Eye Bones (Ojos VMC)"
+                      hint="Off = ojos siguen ratón/ARKit; On = rotar huesos por VMC"
+                      icon={<Eye className="w-3 h-3 text-[#003399]" />}
+                      checked={receive.applyEye}
+                      onCheckedChange={(v) => setReceive('applyEye', v)}
+                    />
+                  </div>
+                </fieldset>
+              </div>
+
+              {/* RIGHT COLUMN: Axis Calibration & Motion Options */}
+              <div className="space-y-2">
+                <fieldset>
+                  <legend>
+                    <Axis3d className="w-3 h-3 inline mr-1" />
+                    Axis Calibration (Ejes de Rotación)
+                  </legend>
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-3 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => applyAxisPreset('vrm0_unity')}
+                        className={cn(
+                          'xp-compact-btn truncate',
+                          !receive.invertX && receive.invertY && receive.invertZ && !receive.mirrorLeftRight && 'font-bold text-[#003399]',
+                        )}
+                      >
+                        Unity Standard
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyAxisPreset('mirror_z')}
+                        className={cn(
+                          'xp-compact-btn truncate',
+                          receive.invertX && receive.invertY && !receive.invertZ && !receive.mirrorLeftRight && 'font-bold text-[#003399]',
+                        )}
+                      >
+                        Invert X+Y
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyAxisPreset('vrm1_direct')}
+                        className={cn(
+                          'xp-compact-btn truncate',
+                          !receive.invertX && !receive.invertY && !receive.invertZ && !receive.mirrorLeftRight && 'font-bold text-[#003399]',
+                        )}
+                      >
+                        Raw (Direct)
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <XpCheckItem
+                        id="vmc-axis-x"
+                        label="Invert X (Pitch)"
+                        hint="Up / Down tilt"
+                        checked={receive.invertX}
+                        onCheckedChange={(v) => setReceive('invertX', v)}
+                      />
+                      <XpCheckItem
+                        id="vmc-axis-y"
+                        label="Invert Y (Yaw)"
+                        hint="Left / Right twist"
+                        checked={receive.invertY}
+                        onCheckedChange={(v) => setReceive('invertY', v)}
+                      />
+                      <XpCheckItem
+                        id="vmc-axis-z"
+                        label="Invert Z (Roll)"
+                        hint="Arm raise / Side tilt"
+                        checked={receive.invertZ}
+                        onCheckedChange={(v) => setReceive('invertZ', v)}
+                      />
+                      <XpCheckItem
+                        id="vmc-axis-mirror"
+                        label="Swap Left ↔ Right"
+                        hint="Mirror L/R bones & ARKit"
+                        checked={receive.mirrorLeftRight}
+                        onCheckedChange={(v) => setReceive('mirrorLeftRight', v)}
+                      />
+                    </div>
+                  </div>
+                </fieldset>
+
+                <fieldset>
+                  <legend>Pose &amp; Position Options</legend>
+                  <div className="space-y-1.5">
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <XpCheckItem
+                        id="vmc-recv-smooth"
+                        label="Smooth Pose"
+                        hint="Slerp anti-jitter"
+                        checked={receive.smoothPose}
+                        onCheckedChange={(v) => setReceive('smoothPose', v)}
+                      />
+                      <XpCheckItem
+                        id="vmc-recv-spine-base"
+                        label="Add Idle Sway"
+                        hint="Natural breathing"
+                        checked={receive.applySpineBase}
+                        onCheckedChange={(v) => setReceive('applySpineBase', v)}
+                      />
+                      <XpCheckItem
+                        id="vmc-recv-hips-pos"
+                        label="Hips Position"
+                        hint="Relative translation"
+                        checked={receive.applyHipsPosition}
+                        onCheckedChange={(v) => setReceive('applyHipsPosition', v)}
+                      />
+                      <XpCheckItem
+                        id="vmc-recv-root"
+                        label="Root Transform"
+                        hint="/VMC/Ext/Root/Pos"
+                        checked={receive.applyRoot}
+                        onCheckedChange={(v) => setReceive('applyRoot', v)}
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => onResetAvatar?.()}
+                      className="w-full flex items-center justify-center gap-1 mt-1"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Reset Pose &amp; Position to Default</span>
+                    </button>
+                  </div>
+                </fieldset>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'send' && (
+            <div className="grid grid-cols-2 gap-2.5">
+              {/* LEFT COLUMN: Target & Master Enable */}
+              <div className="space-y-2">
+                <fieldset>
+                  <legend>VMC Sender Destination (UDP OSC)</legend>
+                  <div className="space-y-2" data-no-drag>
+                    <div className="field-row">
+                      <input
+                        id="vmc-send-enable"
+                        type="checkbox"
+                        checked={send.enabled}
+                        onChange={(e) => setSend('enabled', e.target.checked)}
+                      />
+                      <label htmlFor="vmc-send-enable" className="text-[11px] font-bold text-[#003399] cursor-pointer">
+                        Enable VMC Protocol (Send)
+                      </label>
+                    </div>
+                    <p className="text-[10px] text-[#444] leading-tight">
+                      Broadcast motion &amp; Perfect Sync as Performer via UDP OSC
+                    </p>
+
+                    <div className="pt-1.5 border-t border-[#d0d0bf] space-y-2">
+                      <div className="grid grid-cols-3 gap-1.5 items-end">
+                        <div className="col-span-2">
+                          <label htmlFor="vmc-send-host" className="block text-[10px] text-[#222] mb-0.5">
+                            Target IP / Host
+                          </label>
+                          <input
+                            id="vmc-send-host"
+                            type="text"
+                            value={sendHostInput}
+                            onChange={(e) => setSendHostInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleApplySendTarget(); }}
+                            className="w-full font-mono text-[11px]"
+                            placeholder="127.0.0.1"
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="vmc-send-port" className="block text-[10px] text-[#222] mb-0.5">
+                            Port
+                          </label>
+                          <input
+                            id="vmc-send-port"
+                            type="number"
+                            min={1}
+                            max={65535}
+                            value={sendPortInput}
+                            onChange={(e) => setSendPortInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleApplySendTarget(); }}
+                            className="w-full text-right font-mono text-[11px]"
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleApplySendTarget}
+                        className="w-full"
+                      >
+                        Apply Target Destination
+                      </button>
+                    </div>
+                  </div>
+                </fieldset>
               </div>
 
               {/* RIGHT COLUMN: What to Send & Options */}
-              <div className="space-y-2.5">
-                <div className="space-y-1.5">
-                  <span className="text-[9px] uppercase tracking-wider text-zinc-500 px-0.5">
-                    Data to send (Datos a emitir)
-                  </span>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <CompactSwitch
-                      id="vmc-send-bones"
-                      label="Bone Poses"
-                      hint="Head, spine, arms"
-                      checked={send.sendBonePoses}
-                      onCheckedChange={(v) => setSend('sendBonePoses', v)}
-                    />
-                    <CompactSwitch
-                      id="vmc-send-fingers"
-                      label="Finger Bones"
-                      hint="30 finger joints"
-                      checked={send.sendFingerBonePoses}
-                      onCheckedChange={(v) => setSend('sendFingerBonePoses', v)}
-                    />
-                    <CompactSwitch
-                      id="vmc-send-blend"
-                      label="Standard Facial"
-                      hint="Joy, Sorrow, A, I..."
-                      checked={send.sendBlendShapeData}
-                      onCheckedChange={(v) => setSend('sendBlendShapeData', v)}
-                    />
-                    <CompactSwitch
-                      id="vmc-send-custom-blend"
-                      label="Custom Morphs"
-                      hint="All model morphs"
-                      checked={send.sendCustomBlendShape}
-                      onCheckedChange={(v) => setSend('sendCustomBlendShape', v)}
+              <div className="space-y-2">
+                <fieldset>
+                  <legend>Data to Send (Datos a emitir)</legend>
+                  <div className="space-y-1.5">
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <XpCheckItem
+                        id="vmc-send-bones"
+                        label="Bone Poses"
+                        hint="Head, spine, arms"
+                        checked={send.sendBonePoses}
+                        onCheckedChange={(v) => setSend('sendBonePoses', v)}
+                      />
+                      <XpCheckItem
+                        id="vmc-send-fingers"
+                        label="Finger Bones"
+                        hint="30 finger joints"
+                        checked={send.sendFingerBonePoses}
+                        onCheckedChange={(v) => setSend('sendFingerBonePoses', v)}
+                      />
+                      <XpCheckItem
+                        id="vmc-send-blend"
+                        label="Standard Facial"
+                        hint="Joy, Sorrow, A, I..."
+                        checked={send.sendBlendShapeData}
+                        onCheckedChange={(v) => setSend('sendBlendShapeData', v)}
+                      />
+                      <XpCheckItem
+                        id="vmc-send-custom-blend"
+                        label="Custom Morphs"
+                        hint="Non-standard morphs"
+                        checked={send.sendCustomBlendShape}
+                        onCheckedChange={(v) => setSend('sendCustomBlendShape', v)}
+                      />
+                    </div>
+                    <XpCheckItem
+                      id="vmc-send-perfect-sync"
+                      label="Perfect Sync (52 ARKit Clips)"
+                      hint="Send BrowInnerUp, JawOpen, TongueOut via /VMC/Ext/Blend/Val"
+                      icon={<Sparkles className="w-3 h-3 text-[#003399]" />}
+                      checked={send.sendPerfectSync}
+                      onCheckedChange={(v) => setSend('sendPerfectSync', v)}
+                      disabled={!send.sendBlendShapeData}
                     />
                   </div>
-                </div>
+                </fieldset>
 
-                <div className="space-y-1.5">
-                  <span className="text-[9px] uppercase tracking-wider text-zinc-500 px-0.5">
-                    Transmission Options
-                  </span>
+                <fieldset>
+                  <legend>Transmission Options</legend>
                   <div className="grid grid-cols-2 gap-1.5">
-                    <CompactSwitch
+                    <XpCheckItem
                       id="vmc-send-vrm0-names"
                       label="VRM 0.x Names"
                       hint="Joy/Fun instead of happy/relaxed"
                       checked={send.convertToVrm0BlendShapeName}
                       onCheckedChange={(v) => setSend('convertToVrm0BlendShapeName', v)}
                     />
-                    <CompactSwitch
+                    <XpCheckItem
                       id="vmc-send-rate"
                       label="Limit 30 FPS"
                       hint="Saves network bandwidth"
@@ -623,12 +637,24 @@ export function VmcPanel({ config, onChange, onResetAvatar, onClose }: VmcPanelP
                       onCheckedChange={(v) => setSend('limitDataRate30', v)}
                     />
                   </div>
-                </div>
+                </fieldset>
               </div>
             </div>
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+          )}
+        </article>
+      </div>
+
+      <div className="status-bar shrink-0">
+        <p className="status-bar-field">
+          Perfect Sync: {modelPerfectSyncCount}/{totalPerfectSyncClips} clips
+        </p>
+        <p className="status-bar-field">
+          RX: {receive.enabled ? (receivingTraffic ? `Tracking (${packetCount} pkts)` : `Listening :${receive.port}`) : 'Off'}
+        </p>
+        <p className="status-bar-field">
+          TX: {send.enabled ? `${send.host}:${send.port}` : 'Off'}
+        </p>
+      </div>
+    </div>
   );
 }
