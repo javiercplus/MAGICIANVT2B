@@ -4,7 +4,8 @@
 
 It runs fully offline (static Next.js export served by Electron) and works on Linux, Windows and macOS.
 
-<img width="1279" height="574" alt="MAGICIANVT2B" src="https://github.com/user-attachments/assets/e4f6b525-b8fb-4d01-b2ef-83657e47ffff" />
+<img width="1217" height="553" alt="image" src="https://github.com/user-attachments/assets/43e81b4b-6d38-4771-a368-e94e5be7eff9" />
+
 
 ## Features
 
