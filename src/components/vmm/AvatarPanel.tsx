@@ -372,8 +372,8 @@ export function AvatarPanel({
                             checked={isVisible}
                             onChange={(e) => onToggleMesh?.(mesh.id, e.target.checked)}
                           />
-                          <label htmlFor={chkId} className="truncate font-mono text-[11px] cursor-pointer" title={mesh.name}>
-                            {mesh.name}
+                          <label htmlFor={chkId} className="font-mono text-[11px] cursor-pointer min-w-0" title={mesh.name}>
+                            <span className="truncate inline-block max-w-full align-middle">{mesh.name}</span>
                           </label>
                         </div>
                       </div>
@@ -439,9 +439,11 @@ export function AvatarPanel({
                                     checked={isItemVisible}
                                     onChange={(e) => onToggleMesh?.(mesh.id, e.target.checked)}
                                   />
-                                  <label htmlFor={itemChkId} className="truncate font-mono text-[10.5px] cursor-pointer" title={mesh.name}>
-                                    <Layers className="w-3 h-3 mr-1 inline text-[#003399]" />
-                                    {mesh.name}
+                                  <label htmlFor={itemChkId} className="font-mono text-[10.5px] cursor-pointer min-w-0" title={mesh.name}>
+                                    <span className="inline-flex items-center min-w-0 max-w-full">
+                                      <Layers className="w-3 h-3 mr-1 shrink-0 text-[#003399]" />
+                                      <span className="truncate min-w-0">{mesh.name}</span>
+                                    </span>
                                   </label>
                                 </div>
                               </div>
